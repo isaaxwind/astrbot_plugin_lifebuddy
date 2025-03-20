@@ -1,4 +1,4 @@
-from astrbot.api.event import filter, AstrMessageEvent, AstrBotMessage, MessageEventResult
+from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 
@@ -19,6 +19,7 @@ class MyPlugin(Star):
 
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
+        '''来首'''
         message_str = event.message_str # 获取消息的纯文本内容
         if message_str.startswith("来首"):
             message_musicname=message_str[3:]
