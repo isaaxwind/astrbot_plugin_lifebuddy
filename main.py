@@ -6,6 +6,43 @@ from astrbot.api.message_components import Plain, Image
 from .api import NeteaseCloudMusicAPI
 import urllib.parse
 
+HTML_TMPL = """
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ song_name }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #121212; color: #ffffff; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .container { background-color: #1e1e1e; padding: 40px; box-sizing: border-box; display: flex; border-radius: 10px; }
+        .song { flex: 1; text-align: center; }
+        .song img { max-width: 100%; border-radius: 10px; }
+        .song h1 { font-size: 48px; margin: 20px 0; }
+        .comments { flex: 2; margin-left: 40px; }
+        .comment { margin-bottom: 20px; padding: 20px; border-bottom: 1px solid #333; }
+        .comment p { margin: 0; font-size: 28px; }
+        .comment strong { color: #ffffff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="song">
+            <img src="{{ album_img1v1Url }}" alt="Album Cover">
+            <h1>{{ song_name }}</h1>
+        </div>
+        <div class="comments">
+            <h2>热评:</h2>
+            {% for comment in comments %}
+            <div class="comment">
+                <p><strong>{{ comment.user_nickname }}:</strong> {{ comment.content }} (Likes: {{ comment.likedCount }})</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>
+"""
+
 @register("lifebuddy", "YourName", "生活好基友", "1.0.0")
 class MyPlugin(Star):
     def __init__(self, context: Context):
@@ -34,9 +71,15 @@ class MyPlugin(Star):
                 return
 
             song = songs[0]
+            song_id = song['id']
             song_name = song['name']
-            song_artist=', '.join(song['artists'])
             album_img1v1Url = song['album_img1v1Url']
+            comments = await api.fetch_song_comments(song_id, limit=3)
+            if comments:
+                comments_data = [{'user_nickname': c['user_nickname'], 'content': c['content'], 'likedCount': c['likedCount']} for c in comments]
+            else:
+                comments_data = []
+            
             url = await self.html_render(HTML_TMPL, {
                 "song_name": song_name, 
                 "song_artist": song_artist, 
