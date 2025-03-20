@@ -24,11 +24,25 @@ class MyPlugin(Star):
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
         '''来首'''
-        message_str = event.message_str # 获取消息的纯文本内容
-        if message_str.startswith("来首") and len(message_str)>2:
-            api=NeteaseCloudMusicAPI()
-            message_musicname=message_str[2:]
-            yield event.plain_result(f"未找到歌曲{message_musicname}")
+        msg_str = event.message_str # 获取消息的纯文本内容
+        if msg_str.startswith("来首") and len(msg_str)>2:
+            api = NeteaseCloudMusicAPI()
+            songname = msg_str[2:]
+            songs = await api.fetch_song_data(songname, limit=1)
+            if not songs:
+                yield event.plain_result(f"未找到歌曲{songname}")
+                return
+
+            song = songs[0]
+            song_name = song['name']
+            song_artist=', '.join(song['artists'])
+            album_img1v1Url = song['album_img1v1Url']
+            url = await self.html_render(HTML_TMPL, {
+                "song_name": song_name, 
+                "song_artist": song_artist, 
+                "album_img1v1Url": album_img1v1Url,
+            }, return_url=True)
+            yield event.image_result(url)
 
     async def terminate(self):
         '''可选择实现 terminate 函数，当插件被卸载/停用时会调用。'''
