@@ -3,6 +3,7 @@ from astrbot.api.all import *
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 from astrbot.api.message_components import Plain, Image
+from .api import NeteaseCloudMusicAPI
 import urllib.parse
 
 @register("lifebuddy", "YourName", "生活好基友", "1.0.0")
@@ -24,7 +25,8 @@ class MyPlugin(Star):
     async def on_all_message(self, event: AstrMessageEvent):
         '''来首'''
         message_str = event.message_str # 获取消息的纯文本内容
-        if message_str.startswith("来首"):
+        if message_str.startswith("来首") and len(message_str)>2:
+            api=NeteaseCloudMusicAPI()
             message_musicname=message_str[2:]
             yield event.plain_result(f"未找到歌曲{message_musicname}")
 
