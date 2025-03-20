@@ -20,10 +20,10 @@ class MyPlugin(Star):
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
         message_str = event.message_str # 获取消息的纯文本内容
-        if message_str.startswith("来首")
+        if message_str.startswith("来首"):
             message_musicname=message_str[3:]
             yield event.plain_result(f"未找到歌曲{message_musicname}")
-        else
+        else:
             yield event.plain_result(f"{message_musicname}")
 
     async def terminate(self):
