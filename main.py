@@ -23,20 +23,10 @@ class MyPlugin(Star):
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
         '''来首'''
-        msg_obj = event.message_obj
-        image_obj = None
-        chain = None
-        for item in msg_obj.message:
-            if isinstance(item, Image):
-                image_obj = item
-                image_url = urllib.parse.quote(image_obj.url)
-                chain=[Image.fromURL(image_url)]
-                break
         message_str = event.message_str # 获取消息的纯文本内容
         if message_str.startswith("来首"):
             message_musicname=message_str[2:]
             yield event.plain_result(f"未找到歌曲{message_musicname}")
-            yield event.chain_result(chain)
 
     async def terminate(self):
         '''可选择实现 terminate 函数，当插件被卸载/停用时会调用。'''
