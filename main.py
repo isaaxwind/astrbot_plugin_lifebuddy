@@ -22,7 +22,7 @@ class MyPlugin(Star):
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
         '''来首'''
-        chain = event.message
+        chain = event.message_obj
         message_str = event.message_str # 获取消息的纯文本内容
         if message_str.startswith("来首"):
             message_musicname=message_str[2:]
