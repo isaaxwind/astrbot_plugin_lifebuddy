@@ -1,4 +1,4 @@
-# helloworld
+# lifebuddy
 
 AstrBot 插件模板
 
