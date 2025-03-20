@@ -2,7 +2,7 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.all import *
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
-from astrbot.api.message_components import Plain, Image, Chain
+from astrbot.api.message_components import Plain, Image
 
 @register("lifebuddy", "YourName", "生活好基友", "1.0.0")
 class MyPlugin(Star):
