@@ -82,8 +82,8 @@ class MyPlugin(Star):
             
             url = await self.html_render(HTML_TMPL, {
                 "song_name": song_name, 
-                "song_artist": song_artist, 
                 "album_img1v1Url": album_img1v1Url,
+                "comments": comments_data
             }, return_url=True)
             yield event.image_result(url)
 
