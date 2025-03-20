@@ -25,7 +25,8 @@ class MyPlugin(Star):
         if message_str.startswith("来首"):
             message_musicname=message_str[2:]
             yield event.plain_result(f"未找到歌曲{message_musicname}")
-            yield event.plain_result(event.raw_message)
+            yield event.plain_result(event.message_obj.raw_message)
+            yield event.plain_result(event.message_obj.raw_message)
         #else:
         #    yield event.plain_result(f"{message_str}")
 
