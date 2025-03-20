@@ -26,7 +26,7 @@ class MyPlugin(Star):
         msg_obj = event.message_obj
         image_obj = None
         chain = None
-        for item in msg_obj:
+        for item in msg_obj.message:
             if isinstance(item, Image):
                 image_obj = item
                 image_url = urllib.parse.quote(image_obj.url)
