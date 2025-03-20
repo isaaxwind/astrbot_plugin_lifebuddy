@@ -71,21 +71,7 @@ class MyPlugin(Star):
                 return
 
             song = songs[0]
-            song_id = song['id']
-            song_name = song['name']
-            album_img1v1Url = song['album_img1v1Url']
-            comments = await api.fetch_song_comments(song_id, limit=3)
-            if comments:
-                comments_data = [{'user_nickname': c['user_nickname'], 'content': c['content'], 'likedCount': c['likedCount']} for c in comments]
-            else:
-                comments_data = []
-            
-            url = await self.html_render(HTML_TMPL, {
-                "song_name": song_name, 
-                "album_img1v1Url": album_img1v1Url,
-                "comments": comments_data
-            }, return_url=True)
-            yield event.image_result(url)
+            yield event.image_result("https://music.163.com/#/song?id={song['id']})
 
     async def terminate(self):
         '''可选择实现 terminate 函数，当插件被卸载/停用时会调用。'''
