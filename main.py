@@ -71,7 +71,8 @@ class MyPlugin(Star):
                 return
 
             song = songs[0]
-            yield event.image_result("https://music.163.com/#/song?id={song['id']}")
+            result=f"https://music.163.com/#/song?id={song['id']}"
+            yield event.image_result(result)
 
     async def terminate(self):
         '''可选择实现 terminate 函数，当插件被卸载/停用时会调用。'''
