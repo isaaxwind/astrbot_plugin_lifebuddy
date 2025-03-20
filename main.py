@@ -23,6 +23,8 @@ class MyPlugin(Star):
         if message_str.startswith("来首")
             message_musicname=message_str[3:]
             yield event.plain_result(f"未找到歌曲{message_musicname}")
+        else
+            yield event.plain_result(f"{message_musicname}")
 
     async def terminate(self):
         '''可选择实现 terminate 函数，当插件被卸载/停用时会调用。'''
