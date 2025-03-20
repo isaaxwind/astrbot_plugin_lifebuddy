@@ -23,10 +23,13 @@ class MyPlugin(Star):
     async def on_all_message(self, event: AstrMessageEvent):
         '''来首'''
         chain = event.message_obj
+        message_result=event.make_result()
+        message_result.chain=chain.message
         message_str = event.message_str # 获取消息的纯文本内容
         if message_str.startswith("来首"):
             message_musicname=message_str[2:]
             yield event.plain_result(f"未找到歌曲{message_musicname}")
+            yield message_result
             yield event.chain_result(chain.message)
 
     async def terminate(self):
