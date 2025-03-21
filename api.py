@@ -73,7 +73,7 @@ class NeteaseCloudMusicAPI:
                                 break
                         return comments
             except Exception as e:
-                print(f"Error with {baseurl}: {e}")
+                print(f"Error with {baseurl} 未找到comment: {e}")
                 return []
         return []
 
@@ -86,7 +86,7 @@ class NeteaseCloudMusicAPI:
                         data = await response.json()
                         return data.get('lrc', {}).get('lyric', '歌词未找到')
             except Exception as e:
-                print(f"Error with {baseurl}: {e}")
+                print(f"Error with {baseurl} 未找到lyric: {e}")
         return '歌词未找到'
 
     async def close(self):
