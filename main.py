@@ -66,7 +66,7 @@ class MyPlugin(Star):
             api = NeteaseCloudMusicAPI()
             songname = msg_str[2:]
             songs = await api.fetch_song_data(songname, limit=1, pic=True)
-            if not songs:
+            if not songs or songs==[]:
                 yield event.plain_result(f"未找到歌曲{songname}")
                 return
 
