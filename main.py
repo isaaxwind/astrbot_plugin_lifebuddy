@@ -1,4 +1,4 @@
-from .api import NeteaseMusicAPI
+from .api import NeteaseCloudMusicAPI
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.all import *
 from astrbot.api.star import Context, Star, register
