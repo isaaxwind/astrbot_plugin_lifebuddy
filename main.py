@@ -1,9 +1,9 @@
+from .api import NeteaseMusicAPI
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.all import *
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 from astrbot.api.message_components import Plain, Image
-from .api import NeteaseMusicAPI
 import urllib.parse
 
 HTML_TMPL = """
