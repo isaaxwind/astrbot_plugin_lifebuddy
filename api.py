@@ -3,7 +3,8 @@ import asyncio
 
 class NeteaseCloudMusicAPI:
     def __init__(self):
-        self.baseurls = ["https://netease-music.api.harisfox.com/", "https://neteasecloudmusicapi.vercel.app", ]
+        self.baseurls = ["https://netease-music.api.harisfox.com/" ]
+        
         self.session = aiohttp.ClientSession()
 
     async def fetch_song_detail(self, song_id):

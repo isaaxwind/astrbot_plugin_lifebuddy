@@ -65,7 +65,7 @@ class MyPlugin(Star):
         if msg_str.startswith("来首") and len(msg_str)>2:
             api = NeteaseCloudMusicAPI()
             songname = msg_str[2:]
-            songs = await api.fetch_song_data(songname, limit=1, pic=False)
+            songs = await api.fetch_song_data(songname, limit=1, pic=True)
             if not songs:
                 yield event.plain_result(f"未找到歌曲{songname}")
                 return
