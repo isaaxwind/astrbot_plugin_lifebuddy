@@ -1,7 +1,6 @@
 import aiohttp
 import asyncio
 
-@register("lifebuddy", "YourName", "生活好基友", "1.0.0")
 class NeteaseMusicAPI:
     def __init__(self):
         self.baseurls = ["https://netease-music.api.harisfox.com/" ]
