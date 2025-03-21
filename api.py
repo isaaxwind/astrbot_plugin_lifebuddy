@@ -1,10 +1,6 @@
 import aiohttp
 import asyncio
 
-@register_platform_adapter("fake", "fake 适配器", default_config_tmpl={
-    "token": "your_token",
-    "username": "bot_username"
-})
 class NeteaseMusicAPI:
     def __init__(self):
         self.baseurls = ["https://netease-music.api.harisfox.com/" ]
