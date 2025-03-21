@@ -77,7 +77,7 @@ class MyPlugin(Star):
             yield result
 
 
-     async def fetch_song_data(self, keywords, limit=5, pic=True):
+     async def fetch_song_data(keywords, limit=5, pic=True):
             try:
                 url = f"https://netease-music.api.harisfox.com/search?keywords={keywords}"
                 session = aiohttp.ClientSession()
