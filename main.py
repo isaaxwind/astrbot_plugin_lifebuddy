@@ -63,7 +63,7 @@ class MyPlugin(Star):
         '''来首'''
         msg_str = event.message_str # 获取消息的纯文本内容
         if msg_str.startswith("来首") and len(msg_str)>2:
-            api = NeteaseCloudMusicAPI()
+            api = NeteaseMusicAPI()
             songname = msg_str[2:]
             songs = await api.fetch_song_data(songname, limit=1, pic=True)
             if not songs or songs==[]:
