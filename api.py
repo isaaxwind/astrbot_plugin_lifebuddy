@@ -3,7 +3,7 @@ import asyncio
 
 class NeteaseCloudMusicAPI:
     def __init__(self):
-        #self.baseurls = ["https://netease-music.api.harisfox.com/" ]
+        self.baseurls = ["https://netease-music.api.harisfox.com/" ]
         
         self.session = aiohttp.ClientSession()
 
