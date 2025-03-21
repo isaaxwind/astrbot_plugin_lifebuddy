@@ -17,6 +17,7 @@ class NeteaseCloudMusicAPI:
                         return detail_data['songs'][0]
             except Exception as e:
                 print(f"Error with {baseurl}: {e}")
+                return None
         return None
 
     async def fetch_song_data(self, keywords, limit=5, pic=True):
@@ -47,7 +48,7 @@ class NeteaseCloudMusicAPI:
                                 break
                         return result
             except Exception as e:
-                print(f"Error with {baseurl}: {e}")
+                print(f"Error with {baseurl} 未找到: {e}")
                 return []
         return []
 
