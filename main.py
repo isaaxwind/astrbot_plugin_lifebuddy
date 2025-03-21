@@ -1,10 +1,11 @@
-from .api import NeteaseCloudMusicAPI
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.all import *
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 from astrbot.api.message_components import Plain, Image
 import urllib.parse
+import aiohttp
+import asyncio
 
 HTML_TMPL = """
 <!DOCTYPE html>
@@ -63,9 +64,8 @@ class MyPlugin(Star):
         '''来首'''
         msg_str = event.message_str # 获取消息的纯文本内容
         if msg_str.startswith("来首") and len(msg_str)>2:
-            api = NeteaseCloudMusicAPI()
             songname = msg_str[2:]
-            songs = await api.fetch_song_data(songname, limit=1, pic=True)
+            songs = await fetch_song_data(songname, limit=1, pic=True)
             if not songs or songs==[]:
                 yield event.plain_result(f"未找到歌曲{songname}")
                 return
@@ -75,6 +75,39 @@ class MyPlugin(Star):
             result = event.plain_result(result)
             result.use_t2i(False)
             yield result
+
+
+     async def fetch_song_data(self, keywords, limit=5, pic=True):
+            try:
+                url = f"https://netease-music.api.harisfox.com/search?keywords={keywords}"
+                session = aiohttp.ClientSession()
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        result = []
+                        cnt = 0
+                        for song in data['result']['songs']:
+                            song_id = song['id']
+                            
+                            artists = [artist['name'] for artist in song['artists']]
+                            song_info = {
+                                'id': song_id,
+                                'name': song['name'],
+                                'artists': artists,
+                                'album': song['album']['name'],
+                            }
+                            if pic:
+                                song_detail = await self.fetch_song_detail(song_id)
+                                song_info['album_img1v1Url']= song_detail['al']['picUrl']
+                            result.append(song_info)
+                            cnt += 1
+                            if cnt >= limit:
+                                break
+                        return result
+            except Exception as e:
+                print(f"Error with {baseurl} 未找到data: {e}")
+                return []
+        return []
 
     async def terminate(self):
         '''可选择实现 terminate 函数，当插件被卸载/停用时会调用。'''
