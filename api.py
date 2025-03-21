@@ -1,7 +1,7 @@
 import aiohttp
 import asyncio
 
-class NeteaseCloudMusicAPI:
+class NeteaseMusicAPI:
     def __init__(self):
         self.baseurls = ["https://netease-music.api.harisfox.com/" ]
         
