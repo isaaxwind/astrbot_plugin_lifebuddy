@@ -48,6 +48,7 @@ class NeteaseCloudMusicAPI:
                         return result
             except Exception as e:
                 print(f"Error with {baseurl}: {e}")
+                return []
         return []
 
     async def fetch_song_comments(self, song_id, limit=5):
