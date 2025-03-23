@@ -72,7 +72,7 @@ class MyPlugin(Star):
                 summary+=a
             result=f"{user_name} 的 {args[1]} 选择建议如下："
             result_pair=sorted(chance.items(), reverse=True)
-            for key, value in result_pair.items():
+            for key, value in result_pair:
                 result_chance=f"\n{value} ({key/summary*100:.2f}%)"
                 result+=result_chance
     #    message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
