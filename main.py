@@ -56,7 +56,7 @@ class MyPlugin(Star):
         message_str = event.message_str # 用户发的纯文本消息字符串
         args=message_str.split( )
         result=f"{user_name} 的 {args[0]} 选择建议如下："
-        for i in args
+        for i in args:
             result+=f"\n{i}"        
     #    message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
     #    logger.info(message_chain)
