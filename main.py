@@ -88,6 +88,11 @@ class MyPlugin(Star):
         '''来首'''
         msg_str = event.message_str # 获取消息的纯文本内容
         if msg_str.startswith("来首") and len(msg_str)>2:
+            for item in event.message_obj.message:
+                if isinstance(item, Image):
+                    yield event.plain_result(f"图片可来不了，另请高明吧")
+                    return
+
             songname = msg_str[2:]
             api = NeteaseCloudMusicAPI()
             songs = await api.fetch_song_data(songname, limit=1, pic=True)
