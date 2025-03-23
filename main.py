@@ -74,14 +74,15 @@ class MyPlugin(Star):
             if len(chance)<2:
                 yield event.plain_result("选项太少！")
             else:
-                result=f"{user_name} 的 {args[1]} 选择建议如下："
+                result=[At(qq=event.get_sender_id()),
+                Plain(f" 的 {args[1]} 选择建议如下：")]
                 result_pair=sorted(chance.items(),key=lambda d:d[1], reverse=True)
                 for key, value in result_pair:
                     result_chance=f"\n{key} ({value/summary*100:.2f}%)"
-                    result+=result_chance
+                    result.append(result_chance)
     #    message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
     #    logger.info(message_chain)
-                yield event.plain_result(result) # 发送一条纯文本消息
+                yield event.chain_result(result) # 发送一条纯文本消息
 
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
