@@ -63,15 +63,17 @@ class MyPlugin(Star):
             chance=[]
             summary=0
             for i in range(2,len(args)):
-                crc=binascii.crc32(args[i].encode())
-                random.seed(crc)
+                crcName=binascii.crc32(user_name.encode())%1000
+                crcQuestion=binascii.crc32(args[1].encode())%1000
+                crcChoice=binascii.crc32(args[i].encode())%1000
+                random.seed(crcName*crcQuestion*crcChoice)
                 a=random.randint(0,10000)
                 chance.append(a)
                 summary+=a
             result=f"{user_name} 的 {args[1]} 选择建议如下："
             for i in range(2,len(args)):
                 result_chance=f"\n{args[i]} ({chance[i-2]/summary*100:.2f}%)"
-                result+=result_chance       
+                result+=result_chance
     #    message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
     #    logger.info(message_chain)
             yield event.plain_result(result) # 发送一条纯文本消息
