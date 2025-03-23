@@ -78,7 +78,7 @@ class MyPlugin(Star):
             song_link=f"https://music.163.com/#/song?id={song_id}" 
             result=event.make_result();
             result.chain = [Image(file=album_img1v1Url) ,
-                Plain("{song_name}\n{song_artist}\n{song_link}")]
+                Plain(f"{song_name}\n{song_artist}\n{song_link}")]
             result.use_t2i(False)
             yield result
 
