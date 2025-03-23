@@ -79,7 +79,7 @@ class MyPlugin(Star):
                 result_pair=sorted(chance.items(),key=lambda d:d[1], reverse=True)
                 for key, value in result_pair:
                     result_chance=f"\n{key} ({value/summary*100:.2f}%)"
-                    result.append(result_chance)
+                    result.append(Plain(result_chance))
     #    message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
     #    logger.info(message_chain)
                 yield event.chain_result(result) # 发送一条纯文本消息
