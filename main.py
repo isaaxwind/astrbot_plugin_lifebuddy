@@ -71,8 +71,16 @@ class MyPlugin(Star):
                 return
 
             song = songs[0]
-            result=f"https://music.163.com/#/song?id={song['id']}"
-            result = event.plain_result(result)
+            song_id = song['id']
+            song_artist=', '.join(song['artists'])
+            album_img1v1Url = song['album_img1v1Url']
+            song_name = song['name']
+            song_link=f"https://music.163.com/#/song?id={song_id}"
+            result=event.make_result();
+            result.chain = [Image(file=album_img1v1Url) ,
+                Plain(song_name),
+                Plain(song_artist),
+                Plain(song_link)]
             result.use_t2i(False)
             yield result
 
