@@ -55,12 +55,15 @@ class MyPlugin(Star):
         user_name = event.get_sender_name()
         message_str = event.message_str # 用户发的纯文本消息字符串
         args=message_str.split( )
-        result=f"{user_name} 的 {args[0]} 选择建议如下："
-        for i in args:
-            result+=f"\n{i}"        
+        if len(args)<4:
+            yield event.plain_result("选项太少！")
+        else:
+            result=f"{user_name} 的 {args[1]} 选择建议如下："
+            for i in range(2,len(args)):
+                result+=f"\n{args[i]}"        
     #    message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
     #    logger.info(message_chain)
-        yield event.plain_result(result) # 发送一条纯文本消息
+            yield event.plain_result(result) # 发送一条纯文本消息
 
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
