@@ -49,14 +49,18 @@ class MyPlugin(Star):
         super().__init__(context)
     
     # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
-    #@filter.command("helloworld")
-    #async def helloworld(self, event: AstrMessageEvent):
-    #    '''helloworld''' # 这是 handler 的描述，将会被解析方便用户了解插件内容。建议填写。
-    #    user_name = event.get_sender_name()
-    #    message_str = event.message_str # 用户发的纯文本消息字符串
+    @filter.command("ask")
+    async def ask(self, event: AstrMessageEvent):
+        '''ask''' # 这是 handler 的描述，将会被解析方便用户了解插件内容。建议填写。
+        user_name = event.get_sender_name()
+        message_str = event.message_str # 用户发的纯文本消息字符串
+        args=message_str.split( )
+        result=f"{user_name} 的 {args[0]} 选择建议如下："
+        for i in args
+            result+=f"\n{i}"        
     #    message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
     #    logger.info(message_chain)
-    #    yield event.plain_result(f"你发送了{message_str}!") # 发送一条纯文本消息
+        yield event.plain_result(result) # 发送一条纯文本消息
 
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
