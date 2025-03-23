@@ -61,6 +61,7 @@ class MyPlugin(Star):
             yield event.plain_result("选项太少！")
         else:
             summary=0
+            chance={}
             for i in range(2,len(args)):
                 crcName=binascii.crc32(user_name.encode())%1000
                 crcQuestion=binascii.crc32(args[1].encode())%1000
