@@ -4,6 +4,7 @@ from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 from astrbot.api.message_components import Plain, Image
 import urllib.parse
+import random
 from .api import NeteaseCloudMusicAPI
 
 HTML_TMPL = """
@@ -58,9 +59,17 @@ class MyPlugin(Star):
         if len(args)<4:
             yield event.plain_result("选项太少！")
         else:
+            chance=[]
+            summary=0
+            for i in range(2,len(args)):
+                random.seed(int(args[i]))
+                a=random.randint(0,10000)
+                chance.append(a)
+                summary+=a
             result=f"{user_name} 的 {args[1]} 选择建议如下："
             for i in range(2,len(args)):
-                result+=f"\n{args[i]}"        
+                result_chance=f"\n{args[i]} ({chance[i-2]/summary*100:.2f}%)"
+                result+=result_chance       
     #    message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
     #    logger.info(message_chain)
             yield event.plain_result(result) # 发送一条纯文本消息
