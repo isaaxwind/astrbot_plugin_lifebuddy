@@ -5,6 +5,7 @@ from astrbot.api import logger
 from astrbot.api.message_components import Plain, Image
 import urllib.parse
 import random
+import binascii
 from .api import NeteaseCloudMusicAPI
 
 HTML_TMPL = """
@@ -62,7 +63,8 @@ class MyPlugin(Star):
             chance=[]
             summary=0
             for i in range(2,len(args)):
-                random.seed(int(args[i]))
+                crc=binascii.crc32(args[i].encode())
+                random.seed(crc)
                 a=random.randint(0,10000)
                 chance.append(a)
                 summary+=a
