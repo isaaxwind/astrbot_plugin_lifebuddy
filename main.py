@@ -76,10 +76,10 @@ class MyPlugin(Star):
             else:
                 result=event.make_result()
                 result.chain=[At(qq=event.get_sender_id()),
-                Plain(f" 的 {args[1]} 选择建议如下：")]
+                Plain(f"  的 {args[1]} 选择建议如下：")]
                 result_pair=sorted(chance.items(),key=lambda d:d[1], reverse=True)
                 for key, value in result_pair:
-                    result_chance=f"\n{key} ({value/summary*100:.2f}%)"
+                    result_chance=f"\r\n{key} ({value/summary*100:.2f}%)"
                     result.chain.append(Plain(result_chance))
                 result.use_t2i(False)
                 yield result # 发送一条纯文本消息
