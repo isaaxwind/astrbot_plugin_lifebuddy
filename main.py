@@ -60,7 +60,6 @@ class MyPlugin(Star):
         if len(args)<4:
             yield event.plain_result("选项太少！")
         else:
-            chance=[]
             summary=0
             for i in range(2,len(args)):
                 crcName=binascii.crc32(user_name.encode())%1000
@@ -68,11 +67,12 @@ class MyPlugin(Star):
                 crcChoice=binascii.crc32(args[i].encode())%1000
                 random.seed(crcName*crcQuestion*crcChoice)
                 a=random.randint(0,10000)
-                chance.append(a)
+                chance[a]=args[i]
                 summary+=a
             result=f"{user_name} 的 {args[1]} 选择建议如下："
-            for i in range(2,len(args)):
-                result_chance=f"\n{args[i]} ({chance[i-2]/summary*100:.2f}%)"
+            result_pair=sorted(chance.items(), reverse=True)
+            for key, value in result_pair.items():
+                result_chance=f"\n{value} ({key/summary*100:.2f}%)"
                 result+=result_chance
     #    message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
     #    logger.info(message_chain)
