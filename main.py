@@ -155,9 +155,9 @@ class MyPlugin(Star):
                     if i in songname.lower():
                         result=event.make_result();
                         result.chain = [Plain(f"您要找的是不是："),
-                          Image(file=alias[i])]
-                       result.use_t2i(False)
-                       yield result
+                            Image(file=alias[i])]
+                        result.use_t2i(False)
+                        yield result
                         return
                    
                 yield event.plain_result(f"未找到别名为“{songname}”的歌")
