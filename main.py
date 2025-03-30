@@ -49,6 +49,9 @@ HTML_TMPL = """
 class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
+        alias={
+            "鸡犬":"極圏 / cosMo VS dj TAKA (from SOUND VOLTEX III GRAVITY WARS)",
+            "挠屁股":"GLITTER / Sota Fujimori 2nd Season (from REFLEC BEAT colette -Winter-)"}
     
     # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
     @filter.command("ask")
@@ -114,6 +117,24 @@ class MyPlugin(Star):
                 Plain(f"{song_name}\n{song_artist}\n{song_link}")]
             result.use_t2i(False)
             yield result
+
+        # 别名
+        elif msg_str.endswith("是什么歌") and len(msg_str)>=4
+            for item in event.message_obj.message:
+                if isinstance(item, Image):
+                    yield event.plain_result(f"图片可判断不了，另请高明吧")
+                    return
+
+            if len(msg_str)<=4:
+                return
+
+            songname = msg_str.split("是什么歌")[0]
+            for i in alias:
+                if songname==i:
+                    yield event.plain_result(f"您要找的是不是："+alias[i])
+                    return
+                   
+            yield event.plain_result(f"未找到别名为“{songname}”的歌")
 
     async def terminate(self):
         '''可选择实现 terminate 函数，当插件被卸载/停用时会调用。'''
