@@ -88,26 +88,27 @@ class MyPlugin(Star):
     async def on_all_message(self, event: AstrMessageEvent):
         '''来首'''
         alias={
-            "鸡犬":"https://remywiki.com/images/thumb/f/fb/Kyokuken.png/300px-Kyokuken.png",
-            "傻逼":"https://remywiki.com/images/thumb/6/6f/STULTI.png/300px-STULTI.png",
-            "盎司老头":"https://remywiki.com/images/thumb/c/c5/Onslaught.png/300px-Onslaught.png",
-            "跪舔":"https://remywiki.com/images/thumb/6/6f/Onigami.png/300px-Onigami.png",
-            "七人行":"https://remywiki.com/images/thumb/9/9b/ReRHYZE.png/300px-ReRHYZE.png",
-            "六人行":"https://remywiki.com/images/thumb/7/7b/X-TREME_6.png/300px-X-TREME_6.png",
+            "鸡犬":"https://chilundui.com/data/rbdx/image/song/500100992.png",
+            "傻逼":"https://chilundui.com/data/rbdx/image/song/120000706.png",
+            "盎司老头":"https://chilundui.com/data/rbdx/image/song/600400052.png",
+            "跪舔":"https://chilundui.com/data/rbdx/image/song/100000840.png",
+            "七人行":"https://chilundui.com/data/rbdx/image/song/500101434.png",
+            "六人行":"https://chilundui.com/data/rbdx/image/song/600500061.png",
             "热播":"https://remywiki.com/images/thumb/2/24/Rebellio.png/300px-Rebellio.png",
             "灾舞":"https://remywiki.com/images/thumb/a/a6/Catastrophic_Dance.png/300px-Catastrophic_Dance.png",
-            "吃辣":"https://remywiki.com/images/thumb/5/5e/CLAMARE.png/300px-CLAMARE.png",
-            "异端":"https://remywiki.com/images/thumb/e/e3/HAERETICUS.png/300px-HAERETICUS.png",
-            "雪崩":"https://remywiki.com/images/thumb/e/e5/Valanga.png/300px-Valanga.png",
-            "石玄玄":"https://remywiki.com/images/thumb/7/79/Magnetic.png/300px-Magnetic.png",
+            "吃辣":"https://chilundui.com/data/rbdx/image/song/100000799.png",
+            "异端":"https://chilundui.com/data/rbdx/image/song/120000532.png",
+            "雪崩":"https://chilundui.com/data/rbdx/image/song/120000640.png",
+            "石玄玄":"https://chilundui.com/data/rbdx/image/song/500101271.png",
             "坏疯子":"https://remywiki.com/images/thumb/e/ef/Bad_Maniacs.png/300px-Bad_Maniacs.png",
             "bmsp":"https://remywiki.com/images/thumb/e/ef/Bad_Maniacs.png/300px-Bad_Maniacs.png",
             "坏加密":"https://chilundui.com/data/rbdx/image/song/500101437.png",
             "官恩俊霸":"https://chilundui.com/data/rbdx/image/song/500101246.png",
-            "父进入母逼":"https://remywiki.com/images/thumb/a/a3/FUJIN_Rumble.png/300px-FUJIN_Rumble.png",
+            "父进入母逼":"https://chilundui.com/data/rbdx/image/song/500100035.png",
             "楼":"https://remywiki.com/images/thumb/f/f4/Sakura.png/300px-Sakura.png",
-            "生孩子":"https://remywiki.com/images/thumb/a/a3/FUJIN_Rumble.png/300px-FUJIN_Rumble.png",
-            "辣翅":"https://remywiki.com/images/thumb/3/38/Lachryma%28Re_Queen%27M%29_GRV.png/300px-Lachryma%28Re_Queen%27M%29_GRV.png",
+            "生孩子":"https://chilundui.com/data/rbdx/image/song/500100035.png",
+            "辣翅":"https://chilundui.com/data/rbdx/image/song/500100302.png",
+            "旋转木马":"https://chilundui.com/data/rbdx/image/song/500101390.png",
             "挠屁股":"https://remywiki.com/images/thumb/6/63/GLITTER.png/300px-GLITTER.png"}
         msg_str = event.message_str # 获取消息的纯文本内容
         if msg_str.startswith("来首") and len(msg_str)>=2:
@@ -149,16 +150,20 @@ class MyPlugin(Star):
                 return
 
             songname = msg_str.split("是什么歌")[0]
-            for i in alias:
-                if i in songname.lower():
-                    result=event.make_result();
-                    result.chain = [Plain(f"您要找的是不是："),
-                        Image(file=alias[i])]
-                    result.use_t2i(False)
-                    yield result
-                    return
+            try:
+                for i in alias:
+                    if i in songname.lower():
+                        result=event.make_result();
+                        result.chain = [Plain(f"您要找的是不是："),
+                          Image(file=alias[i])]
+                       result.use_t2i(False)
+                       yield result
+                        return
                    
-            yield event.plain_result(f"未找到别名为“{songname}”的歌")
+                yield event.plain_result(f"未找到别名为“{songname}”的歌")
+            except Exception as e:
+                yield event.plain_result(f"出错了，傻逼！")
+                yield event.plain_result(f"{e}")
 
     async def terminate(self):
         '''可选择实现 terminate 函数，当插件被卸载/停用时会调用。'''
