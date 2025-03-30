@@ -98,6 +98,15 @@ class MyPlugin(Star):
             "灾舞":"https://remywiki.com/images/thumb/a/a6/Catastrophic_Dance.png/300px-Catastrophic_Dance.png",
             "吃辣":"https://remywiki.com/images/thumb/5/5e/CLAMARE.png/300px-CLAMARE.png",
             "异端":"https://remywiki.com/images/thumb/e/e3/HAERETICUS.png/300px-HAERETICUS.png",
+            "雪崩":"https://remywiki.com/images/thumb/e/e5/Valanga.png/300px-Valanga.png",
+            "石玄玄":"https://remywiki.com/images/thumb/7/79/Magnetic.png/300px-Magnetic.png",
+            "坏疯子":"https://remywiki.com/images/thumb/e/ef/Bad_Maniacs.png/300px-Bad_Maniacs.png",
+            "bmsp":"https://remywiki.com/images/thumb/e/ef/Bad_Maniacs.png/300px-Bad_Maniacs.png",
+            "坏加密":"https://chilundui.com/data/rbdx/image/song/500101437.png",
+            "官恩俊霸":"https://chilundui.com/data/rbdx/image/song/500101246.png",
+            "父进入母逼":"https://remywiki.com/images/thumb/a/a3/FUJIN_Rumble.png/300px-FUJIN_Rumble.png",
+            "楼":"https://remywiki.com/images/thumb/f/f4/Sakura.png/300px-Sakura.png",
+            "生孩子":"https://remywiki.com/images/thumb/a/a3/FUJIN_Rumble.png/300px-FUJIN_Rumble.png",
             "辣翅":"https://remywiki.com/images/thumb/3/38/Lachryma%28Re_Queen%27M%29_GRV.png/300px-Lachryma%28Re_Queen%27M%29_GRV.png",
             "挠屁股":"https://remywiki.com/images/thumb/6/63/GLITTER.png/300px-GLITTER.png"}
         msg_str = event.message_str # 获取消息的纯文本内容
@@ -141,7 +150,7 @@ class MyPlugin(Star):
 
             songname = msg_str.split("是什么歌")[0]
             for i in alias:
-                if i in songname:
+                if i.lower() in songname:
                     result=event.make_result();
                     result.chain = [Plain(f"您要找的是不是："),
                         Image(file=alias[i])]
