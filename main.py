@@ -88,8 +88,10 @@ class MyPlugin(Star):
     async def on_all_message(self, event: AstrMessageEvent):
         '''来首'''
         alias={
-            "鸡犬":"極圏 / cosMo VS dj TAKA (from SOUND VOLTEX III GRAVITY WARS)",
-            "挠屁股":"GLITTER / Sota Fujimori 2nd Season (from REFLEC BEAT colette -Winter-)"}
+            "鸡犬":"https://remywiki.com/images/thumb/f/fb/Kyokuken.png/300px-Kyokuken.png",
+            "傻逼":"https://remywiki.com/images/thumb/6/6f/STULTI.png/300px-STULTI.png",
+            "盎司老头":"https://remywiki.com/images/thumb/c/c5/Onslaught.png/300px-Onslaught.png",
+            "挠屁股":"https://remywiki.com/images/thumb/6/63/GLITTER.png/300px-GLITTER.png"}
         msg_str = event.message_str # 获取消息的纯文本内容
         if msg_str.startswith("来首") and len(msg_str)>=2:
             for item in event.message_obj.message:
@@ -132,7 +134,11 @@ class MyPlugin(Star):
             songname = msg_str.split("是什么歌")[0]
             for i in alias:
                 if songname==i:
-                    yield event.plain_result(f"您要找的是不是："+alias[i])
+                    result=event.make_result();
+                    result.chain = [Plain(f"您要找的是不是："),
+                        Image(file=alias[i])]
+                    result.use_t2i(False)
+                    yield result
                     return
                    
             yield event.plain_result(f"未找到别名为“{songname}”的歌")
