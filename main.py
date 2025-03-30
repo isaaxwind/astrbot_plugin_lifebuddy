@@ -49,9 +49,7 @@ HTML_TMPL = """
 class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
-        alias={
-            "鸡犬":"極圏 / cosMo VS dj TAKA (from SOUND VOLTEX III GRAVITY WARS)",
-            "挠屁股":"GLITTER / Sota Fujimori 2nd Season (from REFLEC BEAT colette -Winter-)"}
+        
     
     # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
     @filter.command("ask")
@@ -89,6 +87,9 @@ class MyPlugin(Star):
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
         '''来首'''
+        alias={
+            "鸡犬":"極圏 / cosMo VS dj TAKA (from SOUND VOLTEX III GRAVITY WARS)",
+            "挠屁股":"GLITTER / Sota Fujimori 2nd Season (from REFLEC BEAT colette -Winter-)"}
         msg_str = event.message_str # 获取消息的纯文本内容
         if msg_str.startswith("来首") and len(msg_str)>=2:
             for item in event.message_obj.message:
