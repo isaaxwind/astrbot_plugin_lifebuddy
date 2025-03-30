@@ -110,6 +110,11 @@ class MyPlugin(Star):
             "辣翅":"https://chilundui.com/data/rbdx/image/song/500100302.png",
             "旋转木马":"https://chilundui.com/data/rbdx/image/song/500101390.png",
             "樱刘谦":"https://remywiki.com/images/thumb/7/74/Sakura_Mirage.png/300px-Sakura_Mirage.png",
+            "惊刘谦":"https://chilundui.com/data/rbdx/image/song/500100214.png",
+            "看菲修理鹅":"https://chilundui.com/data/rbdx/image/song/500100749.png",
+            "四川火娃":"https://chilundui.com/data/rbdx/image/song/500100752.png",
+            "四川火娃弱智齿轮队":"https://remywiki.com/images/thumb/f/fe/SCHWARZSCHILD_FIELD.png/300px-SCHWARZSCHILD_FIELD.png",
+            "队歌":"https://remywiki.com/images/thumb/f/fe/SCHWARZSCHILD_FIELD.png/300px-SCHWARZSCHILD_FIELD.png",
             "挠屁股":"https://remywiki.com/images/thumb/6/63/GLITTER.png/300px-GLITTER.png"}
         msg_str = event.message_str # 获取消息的纯文本内容
         if msg_str.startswith("来首") and len(msg_str)>=2:
@@ -151,17 +156,19 @@ class MyPlugin(Star):
                 return
 
             songname = msg_str.split("是什么歌")[0]
+            have=False
             try:
                 for i in alias:
-                    if i in songname.lower():
+                    if i.lower() in songname.lower():
                         result=event.make_result();
                         result.chain = [Plain(f"您要找的是不是："),
                             Image(file=alias[i])]
                         result.use_t2i(False)
                         yield result
-                        return
-                   
-                yield event.plain_result(f"未找到别名为“{songname}”的歌")
+                        have=True
+                        
+                if not have:
+                    yield event.plain_result(f"未找到别名为“{songname}”的歌")
             except Exception as e:
                 yield event.plain_result(f"出错了，傻逼！")
                 yield event.plain_result(f"{e}")
