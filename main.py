@@ -90,7 +90,11 @@ class MyPlugin(Star):
         alias={
             "鸡犬":"https://remywiki.com/images/thumb/f/fb/Kyokuken.png/300px-Kyokuken.png",
             "傻逼":"https://remywiki.com/images/thumb/6/6f/STULTI.png/300px-STULTI.png",
-            "盎司老头":"https://remywiki.com/images/thumb/c/c5/Onslaught.png/300px-Onslaught.png",
+            "盎司老头":"https://remywiki.com/images/thumb/c/c5/Onslaught.png/300px-Onslaught.png"
+            "跪舔":"https://remywiki.com/images/thumb/6/6f/Onigami.png/300px-Onigami.png",
+            "七人行":"https://remywiki.com/images/thumb/9/9b/ReRHYZE.png/300px-ReRHYZE.png",
+            "六人行":"https://remywiki.com/images/thumb/7/7b/X-TREME_6.png/300px-X-TREME_6.png",
+
             "挠屁股":"https://remywiki.com/images/thumb/6/63/GLITTER.png/300px-GLITTER.png"}
         msg_str = event.message_str # 获取消息的纯文本内容
         if msg_str.startswith("来首") and len(msg_str)>=2:
