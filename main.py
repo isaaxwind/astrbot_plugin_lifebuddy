@@ -119,7 +119,7 @@ class MyPlugin(Star):
             yield result
 
         # 别名
-        elif msg_str.endswith("是什么歌") and len(msg_str)>=4
+        elif msg_str.endswith("是什么歌") and len(msg_str)>=4:
             for item in event.message_obj.message:
                 if isinstance(item, Image):
                     yield event.plain_result(f"图片可判断不了，另请高明吧")
