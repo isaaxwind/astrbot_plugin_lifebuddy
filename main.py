@@ -150,7 +150,7 @@ class MyPlugin(Star):
 
             songname = msg_str.split("是什么歌")[0]
             for i in alias:
-                if i.lower() in songname:
+                if i in songname.lower():
                     result=event.make_result();
                     result.chain = [Plain(f"您要找的是不是："),
                         Image(file=alias[i])]
