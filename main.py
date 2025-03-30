@@ -109,6 +109,7 @@ class MyPlugin(Star):
             "生孩子":"https://chilundui.com/data/rbdx/image/song/500100035.png",
             "辣翅":"https://chilundui.com/data/rbdx/image/song/500100302.png",
             "旋转木马":"https://chilundui.com/data/rbdx/image/song/500101390.png",
+            "樱刘谦":"https://remywiki.com/images/thumb/7/74/Sakura_Mirage.png/300px-Sakura_Mirage.png",
             "挠屁股":"https://remywiki.com/images/thumb/6/63/GLITTER.png/300px-GLITTER.png"}
         msg_str = event.message_str # 获取消息的纯文本内容
         if msg_str.startswith("来首") and len(msg_str)>=2:
