@@ -94,7 +94,11 @@ class MyPlugin(Star):
             "跪舔":"https://remywiki.com/images/thumb/6/6f/Onigami.png/300px-Onigami.png",
             "七人行":"https://remywiki.com/images/thumb/9/9b/ReRHYZE.png/300px-ReRHYZE.png",
             "六人行":"https://remywiki.com/images/thumb/7/7b/X-TREME_6.png/300px-X-TREME_6.png",
-
+            "热播":"https://remywiki.com/images/thumb/2/24/Rebellio.png/300px-Rebellio.png",
+            "灾舞":"https://remywiki.com/images/thumb/a/a6/Catastrophic_Dance.png/300px-Catastrophic_Dance.png",
+            "吃辣":"https://remywiki.com/images/thumb/5/5e/CLAMARE.png/300px-CLAMARE.png",
+            "异端":"https://remywiki.com/images/thumb/e/e3/HAERETICUS.png/300px-HAERETICUS.png",
+            "辣翅":"https://remywiki.com/images/thumb/3/38/Lachryma%28Re_Queen%27M%29_GRV.png/300px-Lachryma%28Re_Queen%27M%29_GRV.png",
             "挠屁股":"https://remywiki.com/images/thumb/6/63/GLITTER.png/300px-GLITTER.png"}
         msg_str = event.message_str # 获取消息的纯文本内容
         if msg_str.startswith("来首") and len(msg_str)>=2:
@@ -137,7 +141,7 @@ class MyPlugin(Star):
 
             songname = msg_str.split("是什么歌")[0]
             for i in alias:
-                if songname==i:
+                if i in songname:
                     result=event.make_result();
                     result.chain = [Plain(f"您要找的是不是："),
                         Image(file=alias[i])]
