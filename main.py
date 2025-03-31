@@ -110,6 +110,7 @@ class MyPlugin(Star):
             "辣翅":"https://chilundui.com/data/rbdx/image/song/500100302.png",
             "旋转木马":"https://chilundui.com/data/rbdx/image/song/500101390.png",
             "樱刘谦":"https://remywiki.com/images/thumb/7/74/Sakura_Mirage.png/300px-Sakura_Mirage.png",
+            "纯白":"https://remywiki.com/images/thumb/1/11/Couleur%3DBlanche.png/300px-Couleur%3DBlanche.png",
             "惊刘谦":"https://chilundui.com/data/rbdx/image/song/500100214.png",
             "刘谦魔术":"https://remywiki.com/images/thumb/f/fb/Mirage.png/300px-Mirage.png",
             "看菲修理鹅":"https://chilundui.com/data/rbdx/image/song/500100749.png",
