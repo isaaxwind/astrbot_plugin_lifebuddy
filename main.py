@@ -137,13 +137,22 @@ class MyPlugin(Star):
 
             song = songs[0]
             song_id = song['id']
-            song_artist=', '.join(song['artists'])
+            song_artist = ', '.join(song['artists'])
+            
+            # 1. 新增下面这一行，从字典里把专辑名取出来（如果没有就默认显示未知）
+            song_album = song.get('album', '神秘未知专辑')
+            
             album_img1v1Url = song['album_img1v1Url']
             song_name = song['name']
-            song_link=f"https://music.163.com/#/song?id={song_id}" 
-            result=event.make_result();
-            result.chain = [Image(file=album_img1v1Url) ,
-                Plain(f"{song_name}\n{song_artist}\n{song_link}")]
+            song_link = f"https://music.163.com/#/song?id={song_id}" 
+            result = event.make_result()
+            
+            # 2. 把 Plain 里面原来的内容替换掉，加上 from 《{song_album}》
+            result.chain = [
+                Image(file=album_img1v1Url),
+                Plain(f"{song_name}\n{song_artist}\nfrom 《{song_album}》\n{song_link}")
+            ]
+            
             result.use_t2i(False)
             yield result
 
