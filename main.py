@@ -119,32 +119,40 @@ class MyPlugin(Star):
             "队歌":"https://remywiki.com/images/thumb/f/fe/SCHWARZSCHILD_FIELD.png/300px-SCHWARZSCHILD_FIELD.png",
             "挠屁股":"https://remywiki.com/images/thumb/6/63/GLITTER.png/300px-GLITTER.png"}
         msg_str = event.message_str 
-        if msg_str.startswith("来首") and len(msg_str)>=2:
+        if msg_str.startswith("来首") and len(msg_str) >= 2:
             
-            # 1. 遍历用户发来的消息，找图片
+            # 1. 抓取消息里的图片
             user_image = None
             for item in event.message_obj.message:
                 if isinstance(item, Image):
                     user_image = item
                     break 
             
-            # 2. 提取 file 属性，构造“干净”的新图片发回去
+            # 2. 处理带有图片的请求，加个安全锁
             if user_image:
                 result = event.make_result()
                 
-                # 核心改动在这里：新建一个干净的 Image 对象，只把收到的 file ID 传进去
-                echo_img = Image(file=user_image.file) 
+                # 尝试拿图片的真实外链 (防崩溃核心逻辑)
+                img_url = getattr(user_image, 'url', None)
                 
-                result.chain = [
-                    Plain("未找到歌曲\n"),
-                    echo_img 
-                ]
+                if img_url:
+                    # 如果接口活过来了，拿到了链接，就正常把图拍回去
+                    result.chain = [
+                        Plain("未找到歌曲\n"), 
+                        Image(url=img_url)
+                    ]
+                else:
+                    # 如果像现在这样被腾讯风控成了瞎子，就用纯文本吐槽
+                    result.chain = [
+                        Plain("未找到歌曲\n(另外你发的图被腾讯 RKey 加密了，我这儿解不开变成了瞎子，发不回来哈哈)")
+                    ]
+                    
                 result.use_t2i(False)
                 yield result
                 return 
 
-            # 3. 往下继续走原来的搜歌逻辑...
-            if len(msg_str)<=2:
+            # 3. 如果没图片，往下继续走原来的搜歌逻辑
+            if len(msg_str) <= 2:
                 return
             
             songname = msg_str[2:].strip()
