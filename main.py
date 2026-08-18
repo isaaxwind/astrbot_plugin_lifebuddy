@@ -118,16 +118,32 @@ class MyPlugin(Star):
             "四川火娃弱智齿轮队":"https://remywiki.com/images/thumb/f/fe/SCHWARZSCHILD_FIELD.png/300px-SCHWARZSCHILD_FIELD.png",
             "队歌":"https://remywiki.com/images/thumb/f/fe/SCHWARZSCHILD_FIELD.png/300px-SCHWARZSCHILD_FIELD.png",
             "挠屁股":"https://remywiki.com/images/thumb/6/63/GLITTER.png/300px-GLITTER.png"}
-        msg_str = event.message_str # 获取消息的纯文本内容
+        msg_str = event.message_str 
         if msg_str.startswith("来首") and len(msg_str)>=2:
+            
+            # 1. 遍历用户发来的消息，看看里面有没有图片
+            user_image = None
             for item in event.message_obj.message:
                 if isinstance(item, Image):
-                    yield event.plain_result(f"图片可来不了，另请高明吧")
-                    return
+                    user_image = item
+                    break # 抓到第一张图就停下
+            
+            # 2. 如果真的有图片，就把它和你的吐槽拼接起来发回去
+            if user_image:
+                result = event.make_result()
+                # 直接把用户的图原封不动塞进返回链里
+                result.chain = [
+                    Plain("未找到歌曲\n"),
+                    user_image 
+                ]
+                result.use_t2i(False)
+                yield result
+                return # 发完直接结束，不再往下搜歌了
 
+            # 3. 如果没图片，往下继续走原来的搜歌逻辑
             if len(msg_str)<=2:
                 return
-
+            
             songname = msg_str[2:]
             api = NeteaseCloudMusicAPI()
             songs = await api.fetch_song_data(songname, limit=1, pic=True)
