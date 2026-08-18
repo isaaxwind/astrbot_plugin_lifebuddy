@@ -3,7 +3,12 @@ import asyncio
 
 class NeteaseCloudMusicAPI:
     def __init__(self):
-        self.baseurls = ["https://netease-music.api.harisfox.com/" ] 
+        # 换成目前存活的开源网易云 API 节点
+        self.baseurls = [
+            "https://ncm.icodeq.com", 
+            "https://netease-cloud-music-api-teal-roan.vercel.app",
+            "https://api.injahow.cn/meting/"
+        ] 
         self.session = aiohttp.ClientSession()
 
     async def fetch_song_detail(self, song_id):
