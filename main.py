@@ -121,34 +121,17 @@ class MyPlugin(Star):
         msg_str = event.message_str 
         if msg_str.startswith("来首") and len(msg_str) >= 2:
             
-            # 1. 抓取消息里的图片
-            user_image = None
+            # 1. 简单粗暴地检测有没有图片
+            has_image = False
             for item in event.message_obj.message:
-                if isinstance(item, Image):
-                    user_image = item
+                # 用类名判断，坚决不碰对象内部属性
+                if type(item).__name__ == "Image":
+                    has_image = True
                     break 
             
-            # 2. 处理带有图片的请求，加个安全锁
-            if user_image:
-                result = event.make_result()
-                
-                # 尝试拿图片的真实外链 (防崩溃核心逻辑)
-                img_url = getattr(user_image, 'url', None)
-                
-                if img_url:
-                    # 如果接口活过来了，拿到了链接，就正常把图拍回去
-                    result.chain = [
-                        Plain("未找到歌曲\n"), 
-                        Image(url=img_url)
-                    ]
-                else:
-                    # 如果像现在这样被腾讯风控成了瞎子，就用纯文本吐槽
-                    result.chain = [
-                        Plain("未找到歌曲\n(另外你发的图被腾讯 RKey 加密了，我这儿解不开变成了瞎子，发不回来哈哈)")
-                    ]
-                    
-                result.use_t2i(False)
-                yield result
+            # 2. 如果有图片，直接用最稳的纯文本吐槽，彻底避开底层序列化崩溃
+            if has_image:
+                yield event.plain_result("我暂时发不了图片，操你妈的")
                 return 
 
             # 3. 如果没图片，往下继续走原来的搜歌逻辑
