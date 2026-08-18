@@ -121,30 +121,33 @@ class MyPlugin(Star):
         msg_str = event.message_str 
         if msg_str.startswith("来首") and len(msg_str)>=2:
             
-            # 1. 遍历用户发来的消息，看看里面有没有图片
+            # 1. 遍历用户发来的消息，找图片
             user_image = None
             for item in event.message_obj.message:
                 if isinstance(item, Image):
                     user_image = item
-                    break # 抓到第一张图就停下
+                    break 
             
-            # 2. 如果真的有图片，就把它和你的吐槽拼接起来发回去
+            # 2. 提取 file 属性，构造“干净”的新图片发回去
             if user_image:
                 result = event.make_result()
-                # 直接把用户的图原封不动塞进返回链里
+                
+                # 核心改动在这里：新建一个干净的 Image 对象，只把收到的 file ID 传进去
+                echo_img = Image(file=user_image.file) 
+                
                 result.chain = [
                     Plain("未找到歌曲\n"),
-                    user_image 
+                    echo_img 
                 ]
                 result.use_t2i(False)
                 yield result
-                return # 发完直接结束，不再往下搜歌了
+                return 
 
-            # 3. 如果没图片，往下继续走原来的搜歌逻辑
+            # 3. 往下继续走原来的搜歌逻辑...
             if len(msg_str)<=2:
                 return
             
-            songname = msg_str[2:]
+            songname = msg_str[2:].strip()
             api = NeteaseCloudMusicAPI()
             songs = await api.fetch_song_data(songname, limit=1, pic=True)
             if not songs or songs==[]:
