@@ -7,12 +7,22 @@ from .aliases import AliasStore
 from .identity import stop_event
 from .messages import has_image_by_classname, has_image_by_isinstance
 from .netease import NeteaseCloudMusicAPI
+from .rbdx import RbdxAPI
+from .settings import Settings
 
 
 class SongRuntime:
-    def __init__(self, aliases: AliasStore, netease: NeteaseCloudMusicAPI):
+    def __init__(
+        self,
+        aliases: AliasStore,
+        netease: NeteaseCloudMusicAPI,
+        rbdx: RbdxAPI,
+        settings: Settings,
+    ):
         self.aliases = aliases
         self.netease = netease
+        self.rbdx = rbdx
+        self.settings = settings
 
 
 async def handle_natural_song(event: AstrMessageEvent, runtime: SongRuntime):
@@ -37,6 +47,28 @@ async def _handle_lai_shou(event: AstrMessageEvent, runtime: SongRuntime):
         return
 
     songname = msg_str[2:].strip()
+    try:
+        rbdx_hits = await runtime.rbdx.search_published(songname, limit=1)
+    except Exception:
+        rbdx_hits = []
+    if rbdx_hits:
+        song = rbdx_hits[0]
+        image = await runtime.rbdx.image_file(runtime.rbdx.jacket_url(int(song["id"])))
+        result = event.make_result()
+        if image and not image.startswith("http"):
+            result.chain = [Image(file=image), Plain(runtime.rbdx.format_song_text(song))]
+        else:
+            result.chain = [Plain(runtime.rbdx.format_song_text(song))]
+        result.use_t2i(False)
+        stop_event(event)
+        yield result
+        return
+
+    if not runtime.settings.netease_fallback:
+        stop_event(event)
+        yield event.plain_result(f"未找到歌曲{songname}")
+        return
+
     songs = await runtime.netease.fetch_song_data(songname, limit=1, pic=True)
     if not songs:
         stop_event(event)
@@ -79,10 +111,11 @@ async def _handle_what_song(event: AstrMessageEvent, runtime: SongRuntime):
             return
         stop_event(event)
         for entry in matches:
+            image = await runtime.rbdx.image_file(entry.image)
             result = event.make_result()
             result.chain = [
                 Plain("您要找的是不是："),
-                Image(file=entry.image),
+                Image(file=image),
             ]
             result.use_t2i(False)
             yield result

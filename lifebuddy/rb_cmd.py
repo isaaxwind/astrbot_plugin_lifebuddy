@@ -68,7 +68,7 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
         if not query:
             yield event.plain_result("用法：/rb song <关键词>")
             return
-        hits = await runtime.rbdx.search_published(query, limit=5)
+        hits = await runtime.rbdx.search_published(query)
         if not hits:
             yield event.plain_result(f"没搜到「{query}」")
             return

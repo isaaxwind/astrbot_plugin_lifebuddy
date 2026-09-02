@@ -31,7 +31,7 @@ class LifeBuddy(Star):
         self.rbdx = RbdxAPI(self.settings)
         self.advice_cache = NumberedCache()
         self.fight_cache = NumberedCache()
-        self.song_runtime = SongRuntime(self.aliases, self.netease)
+        self.song_runtime = SongRuntime(self.aliases, self.netease, self.rbdx, self.settings)
         self.rb_runtime = RbRuntime(self.aliases, self.rbdx, self.settings, self.store, self.context)
         proxy = self.settings.rbdx_http_proxy or "-"
         if self.settings.rbdx_http_proxy.lower().startswith("socks"):

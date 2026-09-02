@@ -23,6 +23,39 @@ CATALOG_TTL_SEC = 600
 CATALOG_FAIL_COOLDOWN_SEC = 60
 
 
+def song_sp_level(song: dict[str, Any]) -> int | None:
+    special = song.get("special")
+    if not isinstance(special, dict):
+        return None
+    try:
+        n = int(special.get("ExtLevel") or 0)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def special_ext_id(song: dict[str, Any]) -> int | None:
+    special = song.get("special")
+    if not isinstance(special, dict):
+        return None
+    try:
+        n = int(special.get("ExtID") or 0)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def is_standalone_special(song: dict[str, Any], special_ids: set[int]) -> bool:
+    try:
+        sid = int(song.get("id") or 0)
+    except (TypeError, ValueError):
+        sid = 0
+    if sid and sid in special_ids:
+        return True
+    name = str(song.get("name") or "").strip().upper()
+    return name.endswith("(SPECIAL)") and not song.get("special")
+
+
 def active_levels(song: dict[str, Any]) -> list[int]:
     out: list[int] = []
     for value in song.get("level") or []:
@@ -32,6 +65,9 @@ def active_levels(song: dict[str, Any]) -> list[int]:
             continue
         if level > 0:
             out.append(level)
+    sp = song_sp_level(song)
+    if sp:
+        out.append(sp)
     return out
 
 
@@ -161,7 +197,13 @@ class RbdxAPI:
             if not isinstance(songs, list):
                 last_error = RuntimeError(f"{url} 没有 songs 列表")
                 continue
-            self._catalog = [song for song in songs if isinstance(song, dict) and song.get("id")]
+            raw = [song for song in songs if isinstance(song, dict) and song.get("id")]
+            special_ids = {
+                ext for song in raw if (ext := special_ext_id(song)) is not None
+            }
+            self._catalog = [
+                song for song in raw if not is_standalone_special(song, special_ids)
+            ]
             self._catalog_at = now
             self._catalog_url = url
             self._fail_until = 0.0
@@ -181,18 +223,26 @@ class RbdxAPI:
         songs = await self.fetch_custom_catalog()
         return pick_random_song(songs, level)
 
-    async def search_published(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    async def search_published(self, query: str, limit: int | None = None) -> list[dict[str, Any]]:
         needle = (query or "").strip().lower()
         if not needle:
             return []
         songs = await self.fetch_custom_catalog()
+        special_ids = {
+            ext
+            for song in songs
+            if (ext := special_ext_id(song)) is not None
+        }
         hits: list[dict[str, Any]] = []
         for song in songs:
-            blob = f"{song.get('name', '')} {song.get('artist', '')} {song.get('id', '')}".lower()
+            if is_standalone_special(song, special_ids):
+                continue
+            ext = special_ext_id(song)
+            blob = f"{song.get('name', '')} {song.get('artist', '')} {song.get('id', '')} {ext or ''}".lower()
             if needle not in blob:
                 continue
             hits.append(self._to_search_card(song))
-            if len(hits) >= limit:
+            if limit is not None and len(hits) >= limit:
                 break
         return hits
 
@@ -210,7 +260,7 @@ class RbdxAPI:
                 "b": padded[0] or None,
                 "n": padded[1] or None,
                 "h": padded[2] or None,
-                "sp": None,
+                "sp": song_sp_level(song),
             },
             "matched_levels": levels,
         }
@@ -387,6 +437,9 @@ class RbdxAPI:
                 n = 0
             if n > 0:
                 bits.append(f"{label}{n}")
+        sp = song_sp_level(song)
+        if sp:
+            bits.append(f"SP{sp}")
         header = "随机自制谱" + (f" · Lv.{level}" if level is not None else "")
         lines = [header, name, artist]
         if bits:
@@ -407,7 +460,7 @@ class RbdxAPI:
         if pack_id is not None:
             pack_bit = f"{pack_name} ({pack_id})".strip()
         level_bits = []
-        for key, label in (("b", "B"), ("n", "N"), ("h", "H"), ("sp", "SP")):
+        for key, label in (("b", "B"), ("n", "M"), ("h", "H"), ("sp", "SP")):
             value = levels.get(key)
             if value:
                 level_bits.append(f"{label}{value}")
