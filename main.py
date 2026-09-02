@@ -37,10 +37,11 @@ class LifeBuddy(Star):
         if self.settings.rbdx_http_proxy.lower().startswith("socks"):
             logger.warning("rbdx_http_proxy 是 SOCKS，aiohttp 用不了，请改 Clash 的 HTTP/Mixed 端口")
         logger.info(
-            "lifebuddy ready, db=%s aliases=%s proxy=%s",
+            "lifebuddy ready, db=%s aliases=%s proxy=%s image_base=%s",
             self.store.path,
             len(self.aliases.entries),
             proxy,
+            self.settings.rbdx_image_base,
         )
 
     @filter.command("ask")

@@ -8,7 +8,7 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 | `/rbdx` / `/rbdx 12` | 随机自制谱，可选指定 B/M/H 等级 |
 | `/rbdx arcade` / `/rbdx test 12` | 随机街机谱 / 内测谱（test 走 `test_inner`，要填 `wip_group_ids`） |
 | `/rbdx test_all` | 全部内测谱（`type=test`，含 Mendes） |
-| `/rb song [arcade\|test\|test_all] 关键词` | 搜对应列表 |
+| `/rb song 关键词` | 按自制 / 街机 / 内测分组列出（含谱师；内测要填 `wip_group_ids`） |
 | `来首XXX` | 搜网易云，回封面 + 曲名/艺术家/专辑/链接 |
 | `YYY是什么歌` | 查群梗夹克 |
 | `/nick 上帝` | QQ→称呼 |

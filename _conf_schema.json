@@ -9,7 +9,7 @@
     "description": "夹克图 CDN 根地址",
     "type": "string",
     "default": "https://chilundui.com",
-    "hint": "夹克路径 /data/rbdx/image/song/{SongID}.png"
+    "hint": "只拼 /data/rbdx/image/song/{SongID}.png。可填 IP，例如 http://35.74.121.31，不要用接口返回的 url"
   },
   "rbdx_http_proxy": {
     "description": "访问齿轮队的 HTTP 代理（Clash 的 HTTP / Mixed 端口，不要填 SOCKS）",

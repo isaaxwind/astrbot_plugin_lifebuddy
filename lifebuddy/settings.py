@@ -36,6 +36,8 @@ def _normalize_image_base(raw) -> str:
     base = str(raw or "").strip().rstrip("/")
     if not base or base in _LEGACY_IMAGE_BASES:
         return Settings.rbdx_image_base
+    if "://" not in base:
+        base = f"http://{base}"
     return base
 
 

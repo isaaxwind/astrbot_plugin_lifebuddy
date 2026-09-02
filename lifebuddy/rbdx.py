@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import random
 import re
 import socket
@@ -42,8 +43,10 @@ CATALOG_KIND_LABELS = {
     "test": "内测谱",
     "test_all": "全部内测谱",
 }
+SEARCH_KIND_ORDER = ("custom", "arcade", "test")
 CATALOG_TTL_SEC = 600
 CATALOG_FAIL_COOLDOWN_SEC = 60
+HTTP_UA = "Mozilla/5.0 (compatible; lifebuddy/1.0)"
 
 
 def parse_catalog_kind(token: str) -> str | None:
@@ -64,6 +67,19 @@ def song_charter(song: dict[str, Any]) -> str:
         if value:
             return value
     return ""
+
+
+def _log_warning(message: str, *args: Any) -> None:
+    try:
+        from astrbot.api import logger
+
+        logger.warning(message, *args)
+    except Exception:
+        print(message % args if args else message)
+
+
+def _looks_like_image(data: bytes) -> bool:
+    return data.startswith((b"\x89PNG", b"\xff\xd8\xff", b"RIFF", b"GIF8"))
 
 
 def song_sp_level(song: dict[str, Any]) -> int | None:
@@ -203,22 +219,40 @@ class RbdxAPI:
         raw = (self.settings.rbdx_http_proxy or "").strip()
         return raw or None
 
+    def _jacket_proxy(self, url: str) -> str | None:
+        base = (self.settings.rbdx_image_base or "").rstrip("/")
+        if base and "chilundui.com" not in base and url.startswith(base):
+            return None
+        return self._proxy()
+
+    def _http_headers(self, *, accept: str = "*/*") -> dict[str, str]:
+        return {
+            "User-Agent": HTTP_UA,
+            "Accept": accept,
+        }
+
     async def image_file(self, url: str) -> str:
-        """Download chilundui images through the same proxy; otherwise keep the URL."""
-        if not url or "chilundui.com" not in url:
+        """把夹克拉到本地。地址只用设置里的 CDN 根，不用 downloadall 返回的 url。"""
+        if not url or not url.startswith(("http://", "https://")):
             return url
         timeout = aiohttp.ClientTimeout(total=20)
+        headers = self._http_headers(accept="image/png,image/jpeg,image/webp,*/*")
         try:
             session = await self._session_get()
-            async with session.get(url, timeout=timeout, proxy=self._proxy()) as response:
+            async with session.get(
+                url, headers=headers, timeout=timeout, proxy=self._jacket_proxy(url)
+            ) as response:
                 if response.status != 200:
+                    _log_warning("RBDX jacket HTTP %s: %s", response.status, url)
                     return url
                 data = await response.read()
-        except Exception:
+        except Exception as exc:
+            _log_warning("RBDX jacket fail: %s (%s)", exc, url)
             return url
-        suffix = ".png"
-        if url.lower().endswith(".jpg") or url.lower().endswith(".jpeg"):
-            suffix = ".jpg"
+        if not data or not _looks_like_image(data):
+            _log_warning("RBDX jacket not an image (%s bytes): %s", len(data or b""), url)
+            return url
+        suffix = ".jpg" if data.startswith(b"\xff\xd8\xff") else ".png"
         path = Path(tempfile.gettempdir()) / f"lifebuddy_{abs(hash(url)) % 10**10}{suffix}"
         path.write_bytes(data)
         return str(path)
@@ -248,10 +282,7 @@ class RbdxAPI:
             return cached
 
         timeout = aiohttp.ClientTimeout(total=15)
-        headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; lifebuddy/1.0)",
-            "Accept": "application/json",
-        }
+        headers = self._http_headers(accept="application/json")
         url = self._catalog_url_for(kind)
         last_error: Exception | None = None
         data: Any = None
@@ -290,12 +321,7 @@ class RbdxAPI:
             last_error = RuntimeError(f"{url} 没有 songs 列表")
         self._fail_until[kind] = now + CATALOG_FAIL_COOLDOWN_SEC
         if last_error:
-            try:
-                from astrbot.api import logger
-
-                logger.warning("RBDX catalog skip: %s", last_error)
-            except Exception:
-                print(f"RBDX catalog skip: {last_error}")
+            _log_warning("RBDX catalog skip: %s", last_error)
         return cached
 
     async def random_custom(
@@ -332,6 +358,14 @@ class RbdxAPI:
                 break
         return hits
 
+    async def search_grouped(
+        self, query: str, kinds: list[str], limit: int | None = None
+    ) -> dict[str, list[dict[str, Any]]]:
+        fetched = await asyncio.gather(
+            *[self.search_published(query, limit=limit, kind=kind) for kind in kinds]
+        )
+        return {kind: hits for kind, hits in zip(kinds, fetched)}
+
     def _to_search_card(self, song: dict[str, Any]) -> dict[str, Any]:
         levels = active_levels(song)
         padded = (song.get("level") or []) + [0, 0, 0]
@@ -352,10 +386,7 @@ class RbdxAPI:
         }
 
     def _bot_headers(self) -> dict[str, str]:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; lifebuddy/1.0)",
-            "Accept": "application/json",
-        }
+        headers = self._http_headers(accept="application/json")
         token = (self.settings.rbdx_bot_token or "").strip()
         if token:
             headers["X-Bot-Token"] = token
@@ -556,6 +587,16 @@ class RbdxAPI:
         if extra:
             lines.append(extra)
         return "\n".join(lines)
+
+    def format_grouped_search(self, groups: dict[str, list[dict[str, Any]]]) -> str:
+        blocks: list[str] = []
+        for kind in SEARCH_KIND_ORDER:
+            hits = groups.get(kind) or []
+            if not hits:
+                continue
+            body = "\n\n".join(self.format_song_text(song) for song in hits)
+            blocks.append(f"{catalog_kind_label(kind)}：\n{body}")
+        return "\n\n".join(blocks)
 
     async def close(self):
         if self._session and not self._session.closed:
