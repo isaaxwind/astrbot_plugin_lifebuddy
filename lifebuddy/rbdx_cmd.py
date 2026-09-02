@@ -36,7 +36,7 @@ async def handle_rbdx(event: AstrMessageEvent, rbdx: RbdxAPI):
 
     result = event.make_result()
     result.chain = [
-        Image(file=rbdx.jacket_url(int(song["id"]))),
+        Image(file=await rbdx.image_file(rbdx.jacket_url(int(song["id"])))),
         Plain(rbdx.format_catalog_song(song, level)),
     ]
     result.use_t2i(False)

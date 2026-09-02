@@ -33,7 +33,15 @@ class LifeBuddy(Star):
         self.fight_cache = NumberedCache()
         self.song_runtime = SongRuntime(self.aliases, self.netease, self.rbdx, self.settings)
         self.rb_runtime = RbRuntime(self.aliases, self.rbdx, self.settings, self.store, self.context)
-        logger.info("lifebuddy ready, db=%s aliases=%s", self.store.path, len(self.aliases.entries))
+        proxy = self.settings.rbdx_http_proxy or "-"
+        if self.settings.rbdx_http_proxy.lower().startswith("socks"):
+            logger.warning("rbdx_http_proxy 是 SOCKS，aiohttp 用不了，请改 Clash 的 HTTP/Mixed 端口")
+        logger.info(
+            "lifebuddy ready, db=%s aliases=%s proxy=%s",
+            self.store.path,
+            len(self.aliases.entries),
+            proxy,
+        )
 
     @filter.command("ask")
     async def ask(self, event: AstrMessageEvent):

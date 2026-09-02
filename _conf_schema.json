@@ -1,8 +1,8 @@
 {
   "rbdx_api_base": {
-    "description": "RBDX 站点根地址（不含 /api）",
+    "description": "RBDX API 根地址",
     "type": "string",
-    "default": "https://rbdx.chilundui.com",
+    "default": "https://chilundui.com/api",
     "hint": "/rbdx 会请求 {根地址}/downloadall/?type=custom"
   },
   "rbdx_image_base": {
@@ -10,6 +10,12 @@
     "type": "string",
     "default": "https://www.chilundui.com",
     "hint": "夹克路径 /data/rbdx/image/song/{SongID}.png"
+  },
+  "rbdx_http_proxy": {
+    "description": "访问齿轮队的 HTTP 代理（Clash 的 HTTP / Mixed 端口，不要填 SOCKS）",
+    "type": "string",
+    "default": "",
+    "hint": "默认可空。直连 chilundui.com 也打不开时再填，例如 http://127.0.0.1:7897"
   },
   "rbdx_bot_token": {
     "description": "可选。调用 rbdx /bot 审核接口时放在 X-Bot-Token（服务端目前不校验）",

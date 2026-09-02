@@ -3,8 +3,10 @@ from __future__ import annotations
 import random
 import re
 import socket
+import tempfile
 import time
 import json
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -13,11 +15,9 @@ from .settings import Settings
 
 DOWNLOADALL_PATHS = (
     "/downloadall/?type=custom",
-    "/api/downloadall/?type=custom",
-    "/downloadall.php?type=custom",
 )
 
-BOT_PATH_PREFIXES = ("/bot", "/api/bot")
+BOT_PATH_PREFIXES = ("/bot",)
 
 CATALOG_TTL_SEC = 600
 CATALOG_FAIL_COOLDOWN_SEC = 60
@@ -89,9 +89,33 @@ class RbdxAPI:
             )
             self._session = aiohttp.ClientSession(
                 connector=connector,
-                trust_env=False,
+                trust_env=True,
             )
         return self._session
+
+    def _proxy(self) -> str | None:
+        raw = (self.settings.rbdx_http_proxy or "").strip()
+        return raw or None
+
+    async def image_file(self, url: str) -> str:
+        """Download chilundui images through the same proxy; otherwise keep the URL."""
+        if not url or "chilundui.com" not in url:
+            return url
+        timeout = aiohttp.ClientTimeout(total=20)
+        try:
+            session = await self._session_get()
+            async with session.get(url, timeout=timeout, proxy=self._proxy()) as response:
+                if response.status != 200:
+                    return url
+                data = await response.read()
+        except Exception:
+            return url
+        suffix = ".png"
+        if url.lower().endswith(".jpg") or url.lower().endswith(".jpeg"):
+            suffix = ".jpg"
+        path = Path(tempfile.gettempdir()) / f"lifebuddy_{abs(hash(url)) % 10**10}{suffix}"
+        path.write_bytes(data)
+        return str(path)
 
     def _catalog_urls(self) -> list[str]:
         urls = [f"{self.settings.rbdx_api_base}{path}" for path in DOWNLOADALL_PATHS]
@@ -119,7 +143,12 @@ class RbdxAPI:
         for url in self._catalog_urls():
             try:
                 session = await self._session_get()
-                async with session.get(url, headers=headers, timeout=timeout) as response:
+                async with session.get(
+                    url,
+                    headers=headers,
+                    timeout=timeout,
+                    proxy=self._proxy(),
+                ) as response:
                     if response.status != 200:
                         last_error = RuntimeError(f"{url} HTTP {response.status}")
                         continue
@@ -218,6 +247,7 @@ class RbdxAPI:
                     json=json_body,
                     headers=headers,
                     timeout=timeout,
+                    proxy=self._proxy(),
                 ) as response:
                     text = await response.text()
                     if response.status >= 400:

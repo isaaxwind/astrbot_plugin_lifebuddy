@@ -59,7 +59,7 @@ async def _handle_lai_shou(event: AstrMessageEvent, runtime: SongRuntime):
     if source == "rbdx":
         song = songs[0]
         result = event.make_result()
-        image = runtime.rbdx.jacket_url(int(song["id"]))
+        image = await runtime.rbdx.image_file(runtime.rbdx.jacket_url(int(song["id"])))
         result.chain = [
             Image(file=image),
             Plain(runtime.rbdx.format_song_text(song)),
@@ -107,7 +107,7 @@ async def _handle_what_song(event: AstrMessageEvent, runtime: SongRuntime):
             result = event.make_result()
             result.chain = [
                 Plain("您要找的是不是："),
-                Image(file=entry.image),
+                Image(file=await runtime.rbdx.image_file(entry.image)),
             ]
             result.use_t2i(False)
             yield result
