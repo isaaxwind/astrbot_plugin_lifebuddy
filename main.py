@@ -80,7 +80,7 @@ class LifeBuddy(Star):
 
     @filter.command("dib")
     async def dib(self, event: AstrMessageEvent):
-        """占坑：/dib <曲名或SongID>"""
+        """口香：/dib 看自己  /dib <曲名>  /dib list"""
         stop_event(event)
         async for result in handle_dib(event, self.store, self.rbdx, self.context):
             yield result

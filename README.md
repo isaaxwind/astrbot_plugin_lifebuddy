@@ -12,7 +12,9 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 | `来首XXX` | 搜网易云，回封面 + 曲名/艺术家/专辑/链接 |
 | `YYY是什么歌` | 查群梗夹克 |
 | `/nick 上帝` | QQ→称呼 |
-| `/dib <曲名或SongID>` | 占坑，占了不能弃 |
+| `/dib` | 看自己口香了几天 |
+| `/dib <曲名或SongID>` | 口香一首，占了不能吐 |
+| `/dib list` | 本群口香列表 |
 | `/rb bind <四位数字>` | 绑游戏账号（四位用户ID，须唯一） |
 | `/rb who` | 看自己绑的号 |
 | `/rb unbind` | 管理员解绑 |
@@ -21,6 +23,6 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 | `/fight` | 打架谱面列表（按谱面编号，不是按歌） |
 | `/fight <编号> <展示值>` | 投票 |
 
-QQ / 称呼 / 占坑 / 绑号在 SQLite：`data/plugin_data/lifebuddy/lifebuddy.db`。大肥鱼每轮只看到当前发言者的 `QQ + 称呼`。
+QQ / 称呼 / 口香 / 绑号在 SQLite：`data/plugin_data/lifebuddy/lifebuddy.db`。大肥鱼每轮只看到当前发言者的 `QQ + 称呼`。
 
 `/advice` 默认全关，在 AstrBot 插件管理页把群号填进 `advice_group_ids`。`/rbdx test` 同理，填 `wip_group_ids`。
