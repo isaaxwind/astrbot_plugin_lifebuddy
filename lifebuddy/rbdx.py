@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import re
+import socket
 import time
 import json
 from typing import Any
@@ -19,6 +20,7 @@ DOWNLOADALL_PATHS = (
 BOT_PATH_PREFIXES = ("/bot", "/api/bot")
 
 CATALOG_TTL_SEC = 600
+CATALOG_FAIL_COOLDOWN_SEC = 60
 
 
 def active_levels(song: dict[str, Any]) -> list[int]:
@@ -63,15 +65,39 @@ class RbdxAPI:
         self._session: aiohttp.ClientSession | None = None
         self._catalog: list[dict[str, Any]] = []
         self._catalog_at: float = 0.0
-        self._catalog_path: str | None = None
+        self._catalog_url: str | None = None
+        self._fail_until: float = 0.0
 
     def jacket_url(self, song_id: int) -> str:
         return f"{self.settings.rbdx_image_base}/data/rbdx/image/song/{song_id}.png"
 
+    async def _reset_session(self) -> None:
+        session = self._session
+        self._session = None
+        if session and not session.closed:
+            try:
+                await session.close()
+            except Exception:
+                pass
+
     async def _session_get(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            connector = aiohttp.TCPConnector(
+                family=socket.AF_INET,
+                ttl_dns_cache=300,
+                ssl=True,
+            )
+            self._session = aiohttp.ClientSession(
+                connector=connector,
+                trust_env=False,
+            )
         return self._session
+
+    def _catalog_urls(self) -> list[str]:
+        urls = [f"{self.settings.rbdx_api_base}{path}" for path in DOWNLOADALL_PATHS]
+        if self._catalog_url:
+            urls = [self._catalog_url] + [u for u in urls if u != self._catalog_url]
+        return urls
 
     async def fetch_custom_catalog(self, *, force: bool = False) -> list[dict[str, Any]]:
         now = time.monotonic()
@@ -81,21 +107,18 @@ class RbdxAPI:
             and (now - self._catalog_at) < CATALOG_TTL_SEC
         ):
             return self._catalog
+        if not force and now < self._fail_until:
+            return self._catalog
 
-        session = await self._session_get()
-        timeout = aiohttp.ClientTimeout(total=30)
+        timeout = aiohttp.ClientTimeout(total=15)
         headers = {
             "User-Agent": "Mozilla/5.0 (compatible; lifebuddy/1.0)",
             "Accept": "application/json",
         }
         last_error: Exception | None = None
-        paths = DOWNLOADALL_PATHS
-        if self._catalog_path:
-            paths = (self._catalog_path,) + tuple(p for p in DOWNLOADALL_PATHS if p != self._catalog_path)
-
-        for path in paths:
-            url = f"{self.settings.rbdx_api_base}{path}"
+        for url in self._catalog_urls():
             try:
+                session = await self._session_get()
                 async with session.get(url, headers=headers, timeout=timeout) as response:
                     if response.status != 200:
                         last_error = RuntimeError(f"{url} HTTP {response.status}")
@@ -103,6 +126,7 @@ class RbdxAPI:
                     data = await response.json(content_type=None)
             except Exception as exc:
                 last_error = exc
+                await self._reset_session()
                 continue
             songs = data.get("songs") if isinstance(data, dict) else None
             if not isinstance(songs, list):
@@ -110,12 +134,19 @@ class RbdxAPI:
                 continue
             self._catalog = [song for song in songs if isinstance(song, dict) and song.get("id")]
             self._catalog_at = now
-            self._catalog_path = path
+            self._catalog_url = url
+            self._fail_until = 0.0
             return self._catalog
 
+        self._fail_until = now + CATALOG_FAIL_COOLDOWN_SEC
         if last_error:
-            raise last_error
-        return []
+            try:
+                from astrbot.api import logger
+
+                logger.warning("RBDX catalog skip: %s", last_error)
+            except Exception:
+                print(f"RBDX catalog skip: {last_error}")
+        return self._catalog
 
     async def random_custom(self, level: int | None = None) -> dict[str, Any] | None:
         songs = await self.fetch_custom_catalog()
@@ -201,6 +232,7 @@ class RbdxAPI:
                 raise
             except Exception as exc:
                 last_error = exc
+                await self._reset_session()
                 continue
             if isinstance(data, dict) and data.get("ok") is False:
                 raise RuntimeError(str(data.get("error") or data))

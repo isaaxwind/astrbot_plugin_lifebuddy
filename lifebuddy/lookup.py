@@ -15,7 +15,10 @@ async def search_lai_shou(
     fallback: bool = True,
 ) -> tuple[Source | None, list[dict[str, Any]]]:
     """RBDX first, Netease second. Empty RBDX list keeps current 来首 behavior."""
-    rbdx_hits = await rbdx.search_published(query, limit=5)
+    try:
+        rbdx_hits = await rbdx.search_published(query, limit=5)
+    except Exception:
+        rbdx_hits = []
     if rbdx_hits:
         return "rbdx", rbdx_hits
     if fallback:

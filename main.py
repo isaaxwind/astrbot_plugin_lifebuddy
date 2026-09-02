@@ -89,8 +89,11 @@ class LifeBuddy(Star):
     async def on_all_message(self, event: AstrMessageEvent):
         """来首 / 是什么歌"""
         observe(event, self.store)
-        async for result in handle_natural_song(event, self.song_runtime):
-            yield result
+        try:
+            async for result in handle_natural_song(event, self.song_runtime):
+                yield result
+        except Exception as exc:
+            logger.warning("on_all_message failed: %s", exc)
 
     async def terminate(self):
         await self.netease.close()

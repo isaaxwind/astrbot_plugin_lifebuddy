@@ -23,8 +23,8 @@ async def handle_rbdx(event: AstrMessageEvent, rbdx: RbdxAPI):
 
     try:
         song = await rbdx.random_custom(level)
-    except Exception as exc:
-        yield event.plain_result(f"自制谱列表拉失败：{exc}")
+    except Exception:
+        yield event.plain_result("自制谱列表暂时连不上")
         return
 
     if not song:
