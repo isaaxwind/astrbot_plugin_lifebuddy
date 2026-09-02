@@ -5,9 +5,9 @@ import re
 from astrbot.api.event import AstrMessageEvent
 
 from .aliases import AliasStore
-from .identity import is_admin, observe, sender_qq
+from .identity import group_key, is_admin, observe, sender_qq
 from .lists import short_api_error
-from .rbdx import RbdxAPI
+from .rbdx import RbdxAPI, catalog_kind_label, is_wip_kind, parse_catalog_kind
 from .settings import Settings
 from .store import BuddyStore
 
@@ -16,7 +16,7 @@ HELP = (
     "/rb bind <四位用户ID>\n"
     "/rb who\n"
     "/rb unbind [QQ或用户名]  （仅管理员）\n"
-    "/rb song <关键词>\n"
+    "/rb song [arcade|test|test_all] <关键词>\n"
     "/rb alias list"
 )
 
@@ -64,13 +64,24 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
         return
 
     if action == "song":
-        query = " ".join(rest).strip()
+        kind = "custom"
+        query_parts = rest
+        if query_parts:
+            parsed_kind = parse_catalog_kind(query_parts[0])
+            if parsed_kind and len(query_parts) > 1:
+                kind = parsed_kind
+                query_parts = query_parts[1:]
+        query = " ".join(query_parts).strip()
         if not query:
-            yield event.plain_result("用法：/rb song <关键词>")
+            yield event.plain_result("用法：/rb song [arcade|test|test_all] <关键词>")
             return
-        hits = await runtime.rbdx.search_published(query)
+        if is_wip_kind(kind) and not runtime.settings.allow_wip(group_key(event)):
+            yield event.plain_result("本群未开内测谱")
+            return
+        hits = await runtime.rbdx.search_published(query, kind=kind)
         if not hits:
-            yield event.plain_result(f"没搜到「{query}」")
+            label = catalog_kind_label(kind)
+            yield event.plain_result(f"{label}里没搜到「{query}」")
             return
         lines = [runtime.rbdx.format_song_text(song) for song in hits]
         yield event.plain_result("\n\n".join(lines))

@@ -13,14 +13,57 @@ import aiohttp
 
 from .settings import Settings
 
-DOWNLOADALL_PATHS = (
-    "/downloadall/?type=custom",
-)
-
 BOT_PATH_PREFIXES = ("/bot",)
 
+# arcade/test 匿名会被 downloadall 清掉；ayulsam 的 AccessLevel 足够看这两类
+CATALOG_USER = "ayulsam"
+CATALOG_KINDS = frozenset({"custom", "arcade", "test", "test_all"})
+CATALOG_TYPE_BY_KIND = {
+    "custom": "custom",
+    "arcade": "arcade",
+    "test": "test_inner",
+    "test_all": "test",
+}
+CATALOG_KIND_ALIASES = {
+    "custom": "custom",
+    "arcade": "arcade",
+    "test": "test",
+    "test_all": "test_all",
+    "testall": "test_all",
+    "自制": "custom",
+    "街机": "arcade",
+    "内测": "test",
+    "wip": "test",
+    "全内测": "test_all",
+}
+CATALOG_KIND_LABELS = {
+    "custom": "自制谱",
+    "arcade": "街机谱",
+    "test": "内测谱",
+    "test_all": "全部内测谱",
+}
 CATALOG_TTL_SEC = 600
 CATALOG_FAIL_COOLDOWN_SEC = 60
+
+
+def parse_catalog_kind(token: str) -> str | None:
+    return CATALOG_KIND_ALIASES.get((token or "").strip().lower())
+
+
+def catalog_kind_label(kind: str) -> str:
+    return CATALOG_KIND_LABELS.get(kind, "自制谱")
+
+
+def is_wip_kind(kind: str) -> bool:
+    return kind in ("test", "test_all")
+
+
+def song_charter(song: dict[str, Any]) -> str:
+    for key in ("Charter", "charter", "chart_author", "ChartAuthor"):
+        value = str(song.get(key) or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def song_sp_level(song: dict[str, Any]) -> int | None:
@@ -77,11 +120,38 @@ def filter_by_level(songs: list[dict[str, Any]], level: int) -> list[dict[str, A
 
 def pick_random_song(
     songs: list[dict[str, Any]], level: int | None = None
-) -> dict[str, Any] | None:
-    pool = filter_by_level(songs, level) if level is not None else list(songs)
+) -> tuple[dict[str, Any], bool] | None:
+    pool: list[tuple[dict[str, Any], bool]] = []
+    for song in songs:
+        bmh: list[int] = []
+        for value in song.get("level") or []:
+            try:
+                n = int(value)
+            except (TypeError, ValueError):
+                continue
+            if n > 0:
+                bmh.append(n)
+        sp = song_sp_level(song)
+        if level is None:
+            pool.append((song, False))
+            if sp:
+                pool.append((song, True))
+            continue
+        if level in bmh:
+            pool.append((song, False))
+        if sp == level:
+            pool.append((song, True))
     if not pool:
         return None
     return random.choice(pool)
+
+
+def jacket_id_for_song(song: dict[str, Any], *, sp: bool = False) -> int:
+    if sp:
+        ext = special_ext_id(song)
+        if ext:
+            return ext
+    return int(song["id"])
 
 
 def parse_level_token(token: str) -> int | None:
@@ -99,10 +169,10 @@ class RbdxAPI:
     def __init__(self, settings: Settings):
         self.settings = settings
         self._session: aiohttp.ClientSession | None = None
-        self._catalog: list[dict[str, Any]] = []
-        self._catalog_at: float = 0.0
-        self._catalog_url: str | None = None
-        self._fail_until: float = 0.0
+        self._catalogs: dict[str, list[dict[str, Any]]] = {}
+        self._catalog_at: dict[str, float] = {}
+        self._catalog_url: dict[str, str] = {}
+        self._fail_until: dict[str, float] = {}
 
     def jacket_url(self, song_id: int) -> str:
         return f"{self.settings.rbdx_image_base}/data/rbdx/image/song/{song_id}.png"
@@ -153,63 +223,72 @@ class RbdxAPI:
         path.write_bytes(data)
         return str(path)
 
-    def _catalog_urls(self) -> list[str]:
-        urls = [f"{self.settings.rbdx_api_base}{path}" for path in DOWNLOADALL_PATHS]
-        if self._catalog_url:
-            urls = [self._catalog_url] + [u for u in urls if u != self._catalog_url]
-        return urls
+    def _catalog_url_for(self, kind: str) -> str:
+        if kind not in CATALOG_KINDS:
+            kind = "custom"
+        type_name = CATALOG_TYPE_BY_KIND.get(kind, "custom")
+        url = f"{self.settings.rbdx_api_base}/downloadall/?type={type_name}"
+        if kind in ("arcade", "test", "test_all"):
+            url += f"&user={CATALOG_USER}"
+        return url
 
     async def fetch_custom_catalog(self, *, force: bool = False) -> list[dict[str, Any]]:
+        return await self.fetch_catalog("custom", force=force)
+
+    async def fetch_catalog(self, kind: str = "custom", *, force: bool = False) -> list[dict[str, Any]]:
+        if kind not in CATALOG_KINDS:
+            kind = "custom"
         now = time.monotonic()
-        if (
-            not force
-            and self._catalog
-            and (now - self._catalog_at) < CATALOG_TTL_SEC
-        ):
-            return self._catalog
-        if not force and now < self._fail_until:
-            return self._catalog
+        cached = self._catalogs.get(kind) or []
+        at = self._catalog_at.get(kind, 0.0)
+        fail_until = self._fail_until.get(kind, 0.0)
+        if not force and cached and (now - at) < CATALOG_TTL_SEC:
+            return cached
+        if not force and now < fail_until:
+            return cached
 
         timeout = aiohttp.ClientTimeout(total=15)
         headers = {
             "User-Agent": "Mozilla/5.0 (compatible; lifebuddy/1.0)",
             "Accept": "application/json",
         }
+        url = self._catalog_url_for(kind)
         last_error: Exception | None = None
-        for url in self._catalog_urls():
-            try:
-                session = await self._session_get()
-                async with session.get(
-                    url,
-                    headers=headers,
-                    timeout=timeout,
-                    proxy=self._proxy(),
-                ) as response:
-                    if response.status != 200:
-                        last_error = RuntimeError(f"{url} HTTP {response.status}")
-                        continue
+        data: Any = None
+        try:
+            session = await self._session_get()
+            async with session.get(
+                url,
+                headers=headers,
+                timeout=timeout,
+                proxy=self._proxy(),
+            ) as response:
+                if response.status != 200:
+                    last_error = RuntimeError(f"{url} HTTP {response.status}")
+                else:
                     data = await response.json(content_type=None)
-            except Exception as exc:
-                last_error = exc
-                await self._reset_session()
-                continue
-            songs = data.get("songs") if isinstance(data, dict) else None
-            if not isinstance(songs, list):
-                last_error = RuntimeError(f"{url} 没有 songs 列表")
-                continue
+        except Exception as exc:
+            last_error = exc
+            await self._reset_session()
+
+        songs = data.get("songs") if isinstance(data, dict) else None
+        if isinstance(songs, list):
             raw = [song for song in songs if isinstance(song, dict) and song.get("id")]
             special_ids = {
                 ext for song in raw if (ext := special_ext_id(song)) is not None
             }
-            self._catalog = [
+            catalog = [
                 song for song in raw if not is_standalone_special(song, special_ids)
             ]
-            self._catalog_at = now
-            self._catalog_url = url
-            self._fail_until = 0.0
-            return self._catalog
+            self._catalogs[kind] = catalog
+            self._catalog_at[kind] = now
+            self._catalog_url[kind] = url
+            self._fail_until[kind] = 0.0
+            return catalog
 
-        self._fail_until = now + CATALOG_FAIL_COOLDOWN_SEC
+        if last_error is None:
+            last_error = RuntimeError(f"{url} 没有 songs 列表")
+        self._fail_until[kind] = now + CATALOG_FAIL_COOLDOWN_SEC
         if last_error:
             try:
                 from astrbot.api import logger
@@ -217,17 +296,21 @@ class RbdxAPI:
                 logger.warning("RBDX catalog skip: %s", last_error)
             except Exception:
                 print(f"RBDX catalog skip: {last_error}")
-        return self._catalog
+        return cached
 
-    async def random_custom(self, level: int | None = None) -> dict[str, Any] | None:
-        songs = await self.fetch_custom_catalog()
+    async def random_custom(
+        self, level: int | None = None, kind: str = "custom"
+    ) -> tuple[dict[str, Any], bool] | None:
+        songs = await self.fetch_catalog(kind)
         return pick_random_song(songs, level)
 
-    async def search_published(self, query: str, limit: int | None = None) -> list[dict[str, Any]]:
+    async def search_published(
+        self, query: str, limit: int | None = None, kind: str = "custom"
+    ) -> list[dict[str, Any]]:
         needle = (query or "").strip().lower()
         if not needle:
             return []
-        songs = await self.fetch_custom_catalog()
+        songs = await self.fetch_catalog(kind)
         special_ids = {
             ext
             for song in songs
@@ -238,7 +321,10 @@ class RbdxAPI:
             if is_standalone_special(song, special_ids):
                 continue
             ext = special_ext_id(song)
-            blob = f"{song.get('name', '')} {song.get('artist', '')} {song.get('id', '')} {ext or ''}".lower()
+            blob = (
+                f"{song.get('name', '')} {song.get('artist', '')} {song.get('id', '')} "
+                f"{ext or ''} {song_charter(song)}"
+            ).lower()
             if needle not in blob:
                 continue
             hits.append(self._to_search_card(song))
@@ -253,7 +339,7 @@ class RbdxAPI:
             "id": int(song["id"]),
             "name": song.get("name") or "",
             "artist": song.get("artist") or "",
-            "chart_author": "",
+            "chart_author": song_charter(song),
             "pack_id": None,
             "pack_name": "",
             "levels": {
@@ -440,8 +526,10 @@ class RbdxAPI:
         sp = song_sp_level(song)
         if sp:
             bits.append(f"SP{sp}")
-        header = "随机自制谱" + (f" · Lv.{level}" if level is not None else "")
-        lines = [header, name, artist]
+        lines = [name, artist]
+        charter = song_charter(song)
+        if charter:
+            lines.append(f"谱师 {charter}")
         if bits:
             lines.append(" / ".join(bits))
         return "\n".join(lines)
@@ -449,7 +537,7 @@ class RbdxAPI:
     def format_song_text(self, song: dict[str, Any]) -> str:
         name = song.get("name", "")
         artist = song.get("artist", "")
-        chart_author = song.get("chart_author") or ""
+        chart_author = song_charter(song) or (song.get("chart_author") or "")
         pack_name = song.get("pack_name") or ""
         pack_id = song.get("pack_id")
         levels = song.get("levels") or {}

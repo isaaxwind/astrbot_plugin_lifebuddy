@@ -6,6 +6,9 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 |------|------|
 | `/ask 问题 选项A 选项B …` | CRC32 伪随机百分比建议 |
 | `/rbdx` / `/rbdx 12` | 随机自制谱，可选指定 B/M/H 等级 |
+| `/rbdx arcade` / `/rbdx test 12` | 随机街机谱 / 内测谱（test 走 `test_inner`，要填 `wip_group_ids`） |
+| `/rbdx test_all` | 全部内测谱（`type=test`，含 Mendes） |
+| `/rb song [arcade\|test\|test_all] 关键词` | 搜对应列表 |
 | `来首XXX` | 搜网易云，回封面 + 曲名/艺术家/专辑/链接 |
 | `YYY是什么歌` | 查群梗夹克 |
 | `/nick 上帝` | QQ→称呼 |
@@ -20,4 +23,4 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 
 QQ / 称呼 / 占坑 / 绑号在 SQLite：`data/plugin_data/lifebuddy/lifebuddy.db`。大肥鱼每轮只看到当前发言者的 `QQ + 称呼`。
 
-`/advice` 默认全关，在 AstrBot 插件管理页把群号填进 `advice_group_ids`。
+`/advice` 默认全关，在 AstrBot 插件管理页把群号填进 `advice_group_ids`。`/rbdx test` 同理，填 `wip_group_ids`。

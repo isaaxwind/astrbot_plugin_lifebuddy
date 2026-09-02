@@ -60,11 +60,11 @@ class LifeBuddy(Star):
 
     @filter.command("rbdx")
     async def rbdx_random(self, event: AstrMessageEvent):
-        """随机自制谱，可选等级"""
+        """随机曲，可选 arcade/test 和等级"""
         observe(event, self.store)
         stop_event(event)
         try:
-            async for result in handle_rbdx(event, self.rbdx):
+            async for result in handle_rbdx(event, self.rbdx, self.settings):
                 yield result
         except Exception as exc:
             logger.warning("rbdx failed: %s", exc)

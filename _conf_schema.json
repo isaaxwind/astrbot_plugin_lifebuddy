@@ -3,7 +3,7 @@
     "description": "RBDX API 根地址",
     "type": "string",
     "default": "https://chilundui.com/api",
-    "hint": "/rbdx 会请求 {根地址}/downloadall/?type=custom"
+    "hint": "/rbdx 请求 type=custom；test 走 test_inner，test_all 走 test；arcade/内测带 user=ayulsam"
   },
   "rbdx_image_base": {
     "description": "夹克图 CDN 根地址",
@@ -29,8 +29,9 @@
     "default": true
   },
   "wip_group_ids": {
-    "description": "允许查询未发布库存的群号",
+    "description": "允许使用 /rbdx test、/rbdx test_all 的群号（空则全关）",
     "type": "list",
+    "hint": "在管理页填 QQ 群号。不填则内测谱在任何群都不可用",
     "default": []
   },
   "advice_group_ids": {
