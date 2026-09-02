@@ -271,8 +271,8 @@ class RbdxAPI:
             raise last_error
         raise RuntimeError(f"bot api {path} failed")
 
-    async def lookup_accounts_by_suffix(self, suffix: str) -> list[str]:
-        data = await self._bot_request("GET", "/accounts", params={"suffix": suffix})
+    async def lookup_accounts_by_player_id(self, player_id: str) -> list[str]:
+        data = await self._bot_request("GET", "/accounts", params={"playerId": player_id})
         accounts = data.get("accounts") if isinstance(data, dict) else None
         if not isinstance(accounts, list):
             return []

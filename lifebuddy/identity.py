@@ -5,6 +5,12 @@ from astrbot.api.event import AstrMessageEvent
 from .store import BuddyStore, NickRow
 
 
+def stop_event(event: AstrMessageEvent) -> None:
+    stopper = getattr(event, "stop_event", None)
+    if callable(stopper):
+        stopper()
+
+
 def sender_qq(event: AstrMessageEvent) -> str:
     getter = getattr(event, "get_sender_id", None)
     if callable(getter):

@@ -13,7 +13,7 @@ from .store import BuddyStore
 
 HELP = (
     "RBDX\n"
-    "/rb bind <用户名后四位>\n"
+    "/rb bind <四位用户ID>\n"
     "/rb who\n"
     "/rb unbind [QQ或用户名]  （仅管理员）\n"
     "/rb song <关键词>\n"
@@ -53,7 +53,7 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
         qq = sender_qq(event)
         account = runtime.store.get_bind(qq) if qq else None
         if not account:
-            yield event.plain_result("还没绑号。/rb bind 用户名后四位数字")
+            yield event.plain_result("还没绑号。/rb bind 四位用户ID")
             return
         yield event.plain_result(f"{qq} → {account}")
         return
@@ -84,21 +84,21 @@ async def _bind(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
     if not qq:
         yield event.plain_result("拿不到你的 QQ")
         return
-    suffix = "".join(rest).strip()
-    if not re.fullmatch(r"\d{4}", suffix):
-        yield event.plain_result("用法：/rb bind <用户名后四位数字>")
+    player_id = "".join(rest).strip()
+    if not re.fullmatch(r"\d{4}", player_id):
+        yield event.plain_result("用法：/rb bind <四位用户ID>")
         return
     try:
-        accounts = await runtime.rbdx.lookup_accounts_by_suffix(suffix)
+        accounts = await runtime.rbdx.lookup_accounts_by_player_id(player_id)
     except Exception as exc:
         yield event.plain_result(short_api_error(exc))
         return
     if not accounts:
-        yield event.plain_result(f"没有尾号 {suffix} 的账号")
+        yield event.plain_result(f"没有用户ID {player_id} 的账号")
         return
     if len(accounts) > 1:
         yield event.plain_result(
-            f"尾号 {suffix} 对上 {len(accounts)} 个号，没法自动绑：\n" + "\n".join(accounts)
+            f"用户ID {player_id} 对上 {len(accounts)} 个号，没法自动绑：\n" + "\n".join(accounts)
         )
         return
     account = accounts[0]

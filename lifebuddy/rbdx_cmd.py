@@ -34,10 +34,12 @@ async def handle_rbdx(event: AstrMessageEvent, rbdx: RbdxAPI):
             yield event.plain_result(f"没有等级 {level} 的自制谱")
         return
 
+    text = rbdx.format_catalog_song(song, level)
+    image = await rbdx.image_file(rbdx.jacket_url(int(song["id"])))
     result = event.make_result()
-    result.chain = [
-        Image(file=await rbdx.image_file(rbdx.jacket_url(int(song["id"])))),
-        Plain(rbdx.format_catalog_song(song, level)),
-    ]
+    if image and not image.startswith("http"):
+        result.chain = [Image(file=image), Plain(text)]
+    else:
+        result.chain = [Plain(text)]
     result.use_t2i(False)
     yield result

@@ -8,7 +8,7 @@
   "rbdx_image_base": {
     "description": "夹克图 CDN 根地址",
     "type": "string",
-    "default": "https://www.chilundui.com",
+    "default": "https://chilundui.com",
     "hint": "夹克路径 /data/rbdx/image/song/{SongID}.png"
   },
   "rbdx_http_proxy": {

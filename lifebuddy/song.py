@@ -4,25 +4,15 @@ from astrbot.api.event import AstrMessageEvent
 from astrbot.api.message_components import Image, Plain
 
 from .aliases import AliasStore
-from .lookup import search_lai_shou
+from .identity import stop_event
 from .messages import has_image_by_classname, has_image_by_isinstance
 from .netease import NeteaseCloudMusicAPI
-from .rbdx import RbdxAPI
-from .settings import Settings
 
 
 class SongRuntime:
-    def __init__(
-        self,
-        aliases: AliasStore,
-        netease: NeteaseCloudMusicAPI,
-        rbdx: RbdxAPI,
-        settings: Settings,
-    ):
+    def __init__(self, aliases: AliasStore, netease: NeteaseCloudMusicAPI):
         self.aliases = aliases
         self.netease = netease
-        self.rbdx = rbdx
-        self.settings = settings
 
 
 async def handle_natural_song(event: AstrMessageEvent, runtime: SongRuntime):
@@ -38,6 +28,7 @@ async def handle_natural_song(event: AstrMessageEvent, runtime: SongRuntime):
 
 async def _handle_lai_shou(event: AstrMessageEvent, runtime: SongRuntime):
     if has_image_by_classname(event):
+        stop_event(event)
         yield event.plain_result("我暂时发不了图片，操你妈的")
         return
 
@@ -46,28 +37,10 @@ async def _handle_lai_shou(event: AstrMessageEvent, runtime: SongRuntime):
         return
 
     songname = msg_str[2:].strip()
-    source, songs = await search_lai_shou(
-        songname,
-        runtime.rbdx,
-        runtime.netease,
-        fallback=runtime.settings.netease_fallback,
-    )
+    songs = await runtime.netease.fetch_song_data(songname, limit=1, pic=True)
     if not songs:
+        stop_event(event)
         yield event.plain_result(f"未找到歌曲{songname}")
-        return
-
-    if source == "rbdx":
-        song = songs[0]
-        result = event.make_result()
-        image = await runtime.rbdx.image_file(runtime.rbdx.jacket_url(int(song["id"])))
-        result.chain = [
-            Image(file=image),
-            Plain(runtime.rbdx.format_song_text(song)),
-        ]
-        result.use_t2i(False)
-        yield result
-        if hasattr(event, "stop_event"):
-            event.stop_event()
         return
 
     song = songs[0]
@@ -83,13 +56,13 @@ async def _handle_lai_shou(event: AstrMessageEvent, runtime: SongRuntime):
         Plain(f"{song_name}\n{song_artist}\nfrom 《{song_album}》\n{song_link}"),
     ]
     result.use_t2i(False)
+    stop_event(event)
     yield result
-    if hasattr(event, "stop_event"):
-        event.stop_event()
 
 
 async def _handle_what_song(event: AstrMessageEvent, runtime: SongRuntime):
     if has_image_by_isinstance(event):
+        stop_event(event)
         yield event.plain_result("图片可判断不了，另请高明吧")
         return
 
@@ -101,18 +74,19 @@ async def _handle_what_song(event: AstrMessageEvent, runtime: SongRuntime):
     matches = runtime.aliases.find(songname)
     try:
         if not matches:
+            stop_event(event)
             yield event.plain_result(f"未找到别名为“{songname}”的歌")
             return
+        stop_event(event)
         for entry in matches:
             result = event.make_result()
             result.chain = [
                 Plain("您要找的是不是："),
-                Image(file=await runtime.rbdx.image_file(entry.image)),
+                Image(file=entry.image),
             ]
             result.use_t2i(False)
             yield result
-        if hasattr(event, "stop_event"):
-            event.stop_event()
     except Exception as e:
+        stop_event(event)
         yield event.plain_result("出错了，傻逼！")
         yield event.plain_result(f"{e}")

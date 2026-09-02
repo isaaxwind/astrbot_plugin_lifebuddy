@@ -47,5 +47,5 @@ def require_account(event, store) -> tuple[str | None, str | None]:
         return None, "拿不到你的 QQ"
     account = store.get_bind(qq)
     if not account:
-        return None, "先 /rb bind 用户名后四位数字"
+        return None, "先 /rb bind 四位用户ID"
     return account, None

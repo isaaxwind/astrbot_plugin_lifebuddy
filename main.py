@@ -8,7 +8,7 @@ from .lifebuddy.aliases import AliasStore
 from .lifebuddy.ask import handle_ask
 from .lifebuddy.dib import handle_dib
 from .lifebuddy.fight import handle_fight
-from .lifebuddy.identity import handle_nick, inject_speaker_prompt, observe
+from .lifebuddy.identity import handle_nick, inject_speaker_prompt, observe, stop_event
 from .lifebuddy.lists import NumberedCache
 from .lifebuddy.netease import NeteaseCloudMusicAPI
 from .lifebuddy.rb_cmd import RbRuntime, handle_rb
@@ -31,7 +31,7 @@ class LifeBuddy(Star):
         self.rbdx = RbdxAPI(self.settings)
         self.advice_cache = NumberedCache()
         self.fight_cache = NumberedCache()
-        self.song_runtime = SongRuntime(self.aliases, self.netease, self.rbdx, self.settings)
+        self.song_runtime = SongRuntime(self.aliases, self.netease)
         self.rb_runtime = RbRuntime(self.aliases, self.rbdx, self.settings, self.store, self.context)
         proxy = self.settings.rbdx_http_proxy or "-"
         if self.settings.rbdx_http_proxy.lower().startswith("socks"):
@@ -47,12 +47,14 @@ class LifeBuddy(Star):
     async def ask(self, event: AstrMessageEvent):
         """ask"""
         observe(event, self.store)
+        stop_event(event)
         async for result in handle_ask(event):
             yield result
 
     @filter.command("rb")
     async def rb(self, event: AstrMessageEvent):
         """RBDX 查询 / 绑号"""
+        stop_event(event)
         async for result in handle_rb(event, self.rb_runtime):
             yield result
 
@@ -60,24 +62,32 @@ class LifeBuddy(Star):
     async def rbdx_random(self, event: AstrMessageEvent):
         """随机自制谱，可选等级"""
         observe(event, self.store)
-        async for result in handle_rbdx(event, self.rbdx):
-            yield result
+        stop_event(event)
+        try:
+            async for result in handle_rbdx(event, self.rbdx):
+                yield result
+        except Exception as exc:
+            logger.warning("rbdx failed: %s", exc)
+            yield event.plain_result("自制谱列表暂时连不上")
 
     @filter.command("nick")
     async def nick(self, event: AstrMessageEvent):
         """QQ 称呼：/nick 上帝  或  /nick set <QQ> 上帝"""
+        stop_event(event)
         async for result in handle_nick(event, self.store, self.context):
             yield result
 
     @filter.command("dib")
     async def dib(self, event: AstrMessageEvent):
         """占坑：/dib <曲名或SongID>"""
+        stop_event(event)
         async for result in handle_dib(event, self.store, self.rbdx, self.context):
             yield result
 
     @filter.command("advice")
     async def advice(self, event: AstrMessageEvent):
         """审核：/advice  /advice <编号> 1 正文"""
+        stop_event(event)
         async for result in handle_advice(
             event, self.store, self.rbdx, self.settings, self.advice_cache
         ):
@@ -86,6 +96,7 @@ class LifeBuddy(Star):
     @filter.command("fight")
     async def fight(self, event: AstrMessageEvent):
         """打架：/fight  /fight <编号> <展示值>"""
+        stop_event(event)
         async for result in handle_fight(event, self.store, self.rbdx, self.fight_cache):
             yield result
 
