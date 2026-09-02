@@ -12,7 +12,7 @@ USAGE = (
     "用法：\n"
     "/advice  审核列表\n"
     "/advice <编号或SongID>  看评语\n"
-    "/advice <编号或SongID> <0|1> 正文  写评（1过 / 0要改，也认 ok/ng）"
+    "/advice <编号或SongID> <0|1> [正文]  写评（1/ok 可空评，默认 ok.；0/ng 必须写评）"
 )
 
 
@@ -66,8 +66,11 @@ async def handle_advice(
         else:
             is_ok, comment = flag, " ".join(rest[1:]).strip()
         if not comment:
-            yield event.plain_result("评语不能空。例如 /advice 2 0 节奏要改")
-            return
+            if is_ok == 1:
+                comment = "ok."
+            else:
+                yield event.plain_result("要改必须写评语。例如 /advice 2 0 节奏要改")
+                return
         await rbdx.upsert_advice_comment(account, song_id, comment, is_ok)
         mark = "过" if is_ok == 1 else "要改"
         yield event.plain_result(f"已评 {title} ({song_id}) [{mark}]")
