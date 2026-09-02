@@ -1,0 +1,36 @@
+{
+  "rbdx_api_base": {
+    "description": "RBDX 站点根地址（不含 /api）",
+    "type": "string",
+    "default": "https://rbdx.chilundui.com",
+    "hint": "/rbdx 会请求 {根地址}/downloadall/?type=custom"
+  },
+  "rbdx_image_base": {
+    "description": "夹克图 CDN 根地址",
+    "type": "string",
+    "default": "https://www.chilundui.com",
+    "hint": "夹克路径 /data/rbdx/image/song/{SongID}.png"
+  },
+  "rbdx_bot_token": {
+    "description": "可选。调用 rbdx /bot 审核接口时放在 X-Bot-Token（服务端目前不校验）",
+    "type": "string",
+    "secret": true,
+    "default": ""
+  },
+  "netease_fallback": {
+    "description": "RBDX 未命中时是否回退到网易云",
+    "type": "bool",
+    "default": true
+  },
+  "wip_group_ids": {
+    "description": "允许查询未发布库存的群号",
+    "type": "list",
+    "default": []
+  },
+  "advice_group_ids": {
+    "description": "允许使用 /advice 审核的群号（空则全关）",
+    "type": "list",
+    "hint": "在管理页填 QQ 群号。不填则 /advice 在任何群都不可用",
+    "default": []
+  }
+}

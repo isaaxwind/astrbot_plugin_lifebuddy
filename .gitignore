@@ -1,5 +1,11 @@
 *.vsidx
+.vs/
 .vs/slnx.sqlite
 *.sqlite
 .vs/slnx.sqlite
 .vs/astrbot_plugin_lifebuddy/v17/.wsuo
+__pycache__/
+*.py[cod]
+.idea/
+.DS_Store
+doc/

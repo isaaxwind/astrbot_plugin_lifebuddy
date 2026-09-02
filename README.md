@@ -1,9 +1,23 @@
 # lifebuddy
 
-AstrBot 插件模板
+AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 
-A template plugin for AstrBot plugin feature
+| 触发 | 行为 |
+|------|------|
+| `/ask 问题 选项A 选项B …` | CRC32 伪随机百分比建议 |
+| `/rbdx` / `/rbdx 12` | 随机自制谱，可选指定 B/M/H 等级 |
+| `来首XXX` | 先搜自制谱，没有再回退网易云 |
+| `YYY是什么歌` | 查群梗夹克 |
+| `/nick 上帝` | QQ→称呼 |
+| `/dib <曲名或SongID>` | 占坑，占了不能弃 |
+| `/rb bind <四位数字>` | 绑游戏账号（用户名后四位，须唯一） |
+| `/rb who` | 看自己绑的号 |
+| `/rb unbind` | 管理员解绑 |
+| `/advice` | 审核列表（带编号；管理页 `advice_group_ids` 开群） |
+| `/advice <编号或SongID> [0\|1] 正文` | 看评 / 写评（1过 0要改，也认 ok/ng） |
+| `/fight` | 打架谱面列表（按谱面编号，不是按歌） |
+| `/fight <编号> <展示值>` | 投票 |
 
-# 支持
+QQ / 称呼 / 占坑 / 绑号在 SQLite：`data/plugin_data/lifebuddy/lifebuddy.db`。大肥鱼每轮只看到当前发言者的 `QQ + 称呼`。
 
-[帮助文档](https://astrbot.app)
+`/advice` 默认全关，在 AstrBot 插件管理页把群号填进 `advice_group_ids`。
