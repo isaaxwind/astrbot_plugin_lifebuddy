@@ -29,6 +29,7 @@ def _rb_help(event: AstrMessageEvent, runtime: RbRuntime) -> str:
         "RBDX\n"
         f"{bind}\n"
         "/rb who [昵称/QQ/@]\n"
+        "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
         "/rb recent  （/rb r）\n"
         "/rb unbind [QQ或用户名]  （仅管理员）\n"
         f"{song}\n"
@@ -68,6 +69,10 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
         return
     if action == "who":
         async for result in _who(event, runtime, rest):
+            yield result
+        return
+    if action == "user":
+        async for result in _user(event, runtime, rest):
             yield result
         return
     if action in ("recent", "r"):
@@ -122,6 +127,36 @@ async def _who(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
         yield event.plain_result(f"没找到「{query}」")
         return
     yield event.plain_result("\n".join(_who_line(runtime, row.qq) for row in rows))
+
+
+def _user_text(user: dict) -> str:
+    name = str(user.get("accountName") or "?")
+    player_id = str(user.get("playerId") or "????")
+    skp = user.get("skillPoint", 0)
+    pc = int(user.get("playCount") or 0)
+    return f"{name}\nID {player_id}\nSKP {skp}\n总 PC {pc}"
+
+
+async def _user(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
+    token = " ".join(rest).strip()
+    if not token:
+        yield event.plain_result("用法：/rb user <用户名或四位ID>")
+        return
+    try:
+        data = await runtime.rbdx.fetch_user_profile(token)
+    except Exception as exc:
+        yield event.plain_result(short_api_error(exc))
+        return
+    if not data:
+        yield event.plain_result(f"没有这个号：{token}")
+        return
+    if data.get("ambiguous"):
+        accounts = data.get("accounts") or []
+        yield event.plain_result(
+            f"ID {token} 对上多个号，请用用户名查：\n" + "\n".join(str(x) for x in accounts)
+        )
+        return
+    yield event.plain_result(_user_text(data))
 
 
 def _recent_text(play: dict) -> str:

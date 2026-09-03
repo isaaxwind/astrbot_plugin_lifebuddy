@@ -625,6 +625,21 @@ class RbdxAPI:
             return []
         return [str(name) for name in accounts if str(name).strip()]
 
+    async def fetch_user_profile(self, token: str) -> dict[str, Any] | None:
+        token = (token or "").strip()
+        if not token:
+            return None
+        params = (
+            {"playerId": token}
+            if re.fullmatch(r"\d{4}", token)
+            else {"accountName": token}
+        )
+        data = await self._bot_request("GET", "/user", params=params)
+        if isinstance(data, dict) and data.get("ambiguous"):
+            return data
+        user = data.get("user") if isinstance(data, dict) else None
+        return user if isinstance(user, dict) else None
+
     async def verify_password(self, account_name: str, password: str) -> bool:
         try:
             data = await self._bot_request(

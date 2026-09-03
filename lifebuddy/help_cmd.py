@@ -38,6 +38,7 @@ TOPICS: dict[str, str] = {
         "/rb bind  群里不能绑，请私聊机器人\n"
         "/rb who  看自己绑的号\n"
         "/rb who <昵称/QQ/@>  查别人绑的号\n"
+        "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
         "/rb recent  最近一局（也可 /rb r）\n"
         "/rb unbind [QQ或用户名]  仅管理员\n"
         "/rb song <关键词>  只搜自制谱\n"
@@ -50,6 +51,7 @@ TOPICS: dict[str, str] = {
         "/rb bind <用户ID或用户名>  管理群可直接绑，一对一不能自己换\n"
         "/rb who  看自己绑的号\n"
         "/rb who <昵称/QQ/@>  查别人绑的号\n"
+        "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
         "/rb recent  最近一局（也可 /rb r）\n"
         "/rb unbind [QQ或用户名]  仅管理员\n"
         "/rb song [custom|arcade|test|test_all] <关键词>\n"
@@ -62,6 +64,7 @@ TOPICS: dict[str, str] = {
     "rb_private": (
         "/rb bind <用户ID或用户名> <密码>  一对一，绑过不能自己换\n"
         "/rb who  看自己绑的号\n"
+        "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
         "/rb recent  最近一局（也可 /rb r）\n"
         "/rb song <关键词>  只搜自制谱"
     ),
