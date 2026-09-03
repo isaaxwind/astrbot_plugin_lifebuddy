@@ -102,22 +102,14 @@ def _looks_like_image(data: bytes) -> bool:
     return data.startswith((b"\x89PNG", b"\xff\xd8\xff", b"RIFF", b"GIF8"))
 
 
-def format_level_label(level: int, subdiff: int = 0) -> str:
+def format_level_label(level: int, subdiff: int = 0, raw_level: int = 0) -> str:
     if level <= 0:
         return ""
     if subdiff <= 0:
         return str(level)
-    if level in (10, 12):
-        return f"12.{subdiff}"
-    if level == 13:
-        return f"13.{subdiff}"
-    if level == 14:
-        return f"14.{subdiff - 8}"
-    if level == 15:
-        return f"15.{subdiff}"
-    if level == 16:
-        return f"16.{subdiff - 8}"
-    return str(level)
+    prefix = 12 if raw_level == 10 and level == 12 else level
+    shown = subdiff - 8 if level in (14, 16) else subdiff
+    return f"{prefix}.{shown}"
 
 
 def diff_level_bits(
