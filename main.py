@@ -159,6 +159,12 @@ class LifeBuddy(Star):
     async def on_all_message(self, event: AstrMessageEvent):
         """来首 / 是什么歌；顺便存图给对称用"""
         observe(event, self.store)
+        msg = event.message_str or ""
+        natural_song = (msg.startswith("来首") and len(msg) >= 2) or (
+            msg.endswith("是什么歌") and len(msg) >= 4
+        )
+        if natural_song:
+            stop_event(event)
         try:
             await ingest_event_image(event, self.images)
         except Exception as exc:
