@@ -3,11 +3,12 @@ from __future__ import annotations
 import re
 
 from astrbot.api.event import AstrMessageEvent
+from astrbot.api.message_components import Image, Plain
 
 from .aliases import AliasStore
 from .identity import group_key, is_admin, observe, sender_qq
 from .lists import short_api_error
-from .rbdx import RbdxAPI
+from .rbdx import RbdxAPI, catalog_kind_label, is_wip_kind, parse_catalog_kind
 from .settings import Settings
 from .store import BuddyStore
 
@@ -16,8 +17,10 @@ HELP = (
     "/rb bind <四位用户ID>\n"
     "/rb who\n"
     "/rb unbind [QQ或用户名]  （仅管理员）\n"
-    "/rb song <关键词>\n"
-    "/rb alias list"
+    "/rb song [custom|arcade|test|test_all] <关键词>\n"
+    "/rb alias list\n"
+    "/rb alias add <别名> <SongID或图片URL>\n"
+    "/rb alias del <别名>  （仅管理员）"
 )
 
 
@@ -58,24 +61,14 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
         yield event.plain_result(f"{qq} → {account}")
         return
 
-    if action == "alias" and (not rest or rest[0].lower() == "list"):
-        names = "、".join(entry.alias for entry in runtime.aliases.entries)
-        yield event.plain_result(f"已登记别名 {len(runtime.aliases.entries)} 条：\n{names}")
+    if action == "alias":
+        async for result in _alias(event, runtime, rest):
+            yield result
         return
 
     if action == "song":
-        query = " ".join(rest).strip()
-        if not query:
-            yield event.plain_result("用法：/rb song <关键词>")
-            return
-        kinds = ["custom", "arcade"]
-        if runtime.settings.allow_wip(group_key(event)):
-            kinds.append("test")
-        groups = await runtime.rbdx.search_grouped(query, kinds)
-        if not any(groups.values()):
-            yield event.plain_result(f"没搜到「{query}」")
-            return
-        yield event.plain_result(runtime.rbdx.format_grouped_search(groups))
+        async for result in _song(event, runtime, rest):
+            yield result
         return
 
     yield event.plain_result(HELP)
@@ -130,3 +123,105 @@ async def _unbind(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
         yield event.plain_result(f"已解绑 {name}")
         return
     yield event.plain_result(f"没找到绑定：{target}")
+
+
+async def _song(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
+    kinds = ["custom", "arcade"]
+    query_parts = list(rest)
+    if rest:
+        parsed_kind = parse_catalog_kind(rest[0])
+        if parsed_kind:
+            kinds = [parsed_kind]
+            query_parts = rest[1:]
+    query = " ".join(query_parts).strip()
+    if not query:
+        yield event.plain_result("用法：/rb song [custom|arcade|test|test_all] <关键词>")
+        return
+    if any(is_wip_kind(kind) for kind in kinds) and not runtime.settings.allow_wip(
+        group_key(event)
+    ):
+        yield event.plain_result("本群未开内测谱")
+        return
+    if kinds == ["custom", "arcade"] and runtime.settings.allow_wip(group_key(event)):
+        kinds.extend(["test", "brit"])
+    groups = await runtime.rbdx.search_grouped(query, kinds)
+    flat: list[tuple[str, dict]] = []
+    for kind, hits in groups.items():
+        for song in hits:
+            flat.append((kind, song))
+    if not flat:
+        yield event.plain_result(f"没搜到「{query}」")
+        return
+    if len(flat) == 1:
+        kind, song = flat[0]
+        text = f"{catalog_kind_label(kind)}\n{runtime.rbdx.format_song_text(song)}"
+        image = await runtime.rbdx.image_file(
+            runtime.rbdx.jacket_url(int(song["id"]))
+        )
+        result = event.make_result()
+        if image and not image.startswith("http"):
+            result.chain = [Image(file=image), Plain(text)]
+        else:
+            result.chain = [Plain(text)]
+        result.use_t2i(False)
+        yield result
+        return
+    yield event.plain_result(runtime.rbdx.format_grouped_search(groups))
+
+
+async def _alias(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
+    if not rest or rest[0].lower() == "list":
+        names = "、".join(entry.alias for entry in runtime.aliases.entries)
+        yield event.plain_result(f"已登记别名 {len(runtime.aliases.entries)} 条：\n{names}")
+        return
+
+    sub = rest[0].lower()
+    args = rest[1:]
+    if sub == "add":
+        async for result in _alias_add(event, runtime, args):
+            yield result
+        return
+    if sub in ("del", "rm", "remove"):
+        if not is_admin(event, runtime.context):
+            yield event.plain_result("只有管理员能删别名")
+            return
+        name = " ".join(args).strip()
+        if not name:
+            yield event.plain_result("用法：/rb alias del <别名>")
+            return
+        old = runtime.aliases.remove(name)
+        if not old:
+            yield event.plain_result(f"没有别名「{name}」")
+            return
+        yield event.plain_result(f"已删别名 {old.alias}")
+        return
+    yield event.plain_result(HELP)
+
+
+async def _alias_add(event: AstrMessageEvent, runtime: RbRuntime, args: list[str]):
+    if len(args) < 2:
+        yield event.plain_result("用法：/rb alias add <别名> <SongID或图片URL>")
+        return
+    tail = args[-1]
+    name = " ".join(args[:-1]).strip()
+    song_id: int | None = None
+    image = ""
+    if tail.startswith("http://") or tail.startswith("https://"):
+        image = tail
+    elif re.fullmatch(r"\d+", tail):
+        song_id = int(tail)
+    else:
+        yield event.plain_result("用法：/rb alias add <别名> <SongID或图片URL>")
+        return
+    if not name:
+        yield event.plain_result("用法：/rb alias add <别名> <SongID或图片URL>")
+        return
+    entry, updated = runtime.aliases.add(
+        name,
+        song_id=song_id,
+        image=image,
+        image_base=runtime.settings.rbdx_image_base,
+    )
+    verb = "更新" if updated else "已加"
+    extra = f" {entry.song_id}" if entry.song_id is not None else ""
+    yield event.plain_result(f"{verb}别名 {entry.alias}{extra}")

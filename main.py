@@ -8,6 +8,7 @@ from .lifebuddy.aliases import AliasStore
 from .lifebuddy.ask import handle_ask
 from .lifebuddy.dib import handle_dib
 from .lifebuddy.fight import handle_fight
+from .lifebuddy.help_cmd import handle_help
 from .lifebuddy.identity import handle_nick, inject_speaker_prompt, observe, stop_event
 from .lifebuddy.lists import NumberedCache
 from .lifebuddy.netease import NeteaseCloudMusicAPI
@@ -43,6 +44,13 @@ class LifeBuddy(Star):
             proxy,
             self.settings.rbdx_image_base,
         )
+
+    @filter.command("help")
+    async def help_cmd(self, event: AstrMessageEvent):
+        """帮助：/help  /help rbdx"""
+        stop_event(event)
+        async for result in handle_help(event):
+            yield result
 
     @filter.command("ask")
     async def ask(self, event: AstrMessageEvent):

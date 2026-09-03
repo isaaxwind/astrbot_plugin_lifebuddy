@@ -15,37 +15,32 @@ from .rbdx import (
 from .settings import Settings
 
 USAGE = (
-    "用法：/rbdx  或  /rbdx [arcade|test|test_all] [等级]\n"
-    "例如 /rbdx 12  /rbdx arcade  /rbdx test 12  /rbdx test_all"
+    "用法：/rbdx [arcade|test|test_all] [等级] [关键词]\n"
+    "例如 /rbdx 12  /rbdx arcade ryu  /rbdx test 12  /rbdx arcade 10 ryu"
 )
 
 
-def parse_rbdx_args(args: list[str]) -> tuple[str, int | None] | None:
+def parse_rbdx_args(args: list[str]) -> tuple[str, int | None, str]:
     kind = "custom"
     level: int | None = None
+    query_parts: list[str] = []
     for tok in args:
         parsed_kind = parse_catalog_kind(tok)
         if parsed_kind:
             kind = parsed_kind
             continue
         parsed_level = parse_level_token(tok)
-        if parsed_level is not None and 1 <= parsed_level <= 20:
-            if level is not None:
-                return None
+        if parsed_level is not None and 1 <= parsed_level <= 20 and level is None:
             level = parsed_level
             continue
-        return None
-    return kind, level
+        query_parts.append(tok)
+    return kind, level, " ".join(query_parts).strip()
 
 
 async def handle_rbdx(event: AstrMessageEvent, rbdx: RbdxAPI, settings: Settings):
     parts = event.message_str.split()
     args = parts[1:] if parts else []
-    parsed = parse_rbdx_args(args)
-    if parsed is None:
-        yield event.plain_result(USAGE)
-        return
-    kind, level = parsed
+    kind, level, query = parse_rbdx_args(args)
     label = catalog_kind_label(kind)
 
     if is_wip_kind(kind) and not settings.allow_wip(group_key(event)):
@@ -53,13 +48,18 @@ async def handle_rbdx(event: AstrMessageEvent, rbdx: RbdxAPI, settings: Settings
         return
 
     try:
-        picked = await rbdx.random_custom(level, kind=kind)
+        picked = await rbdx.random_custom(level, kind=kind, query=query)
     except Exception:
         yield event.plain_result(f"{label}列表暂时连不上")
         return
 
     if not picked:
-        if level is None:
+        extra = f"「{query}」" if query else ""
+        if level is None and extra:
+            yield event.plain_result(f"没有带 {extra} 的{label}")
+        elif extra:
+            yield event.plain_result(f"没有等级 {level} 且带 {extra} 的{label}")
+        elif level is None:
             yield event.plain_result(f"{label}列表是空的")
         else:
             yield event.plain_result(f"没有等级 {level} 的{label}")

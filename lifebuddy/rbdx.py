@@ -18,7 +18,7 @@ BOT_PATH_PREFIXES = ("/bot",)
 
 # arcade/test 匿名会被 downloadall 清掉；ayulsam 的 AccessLevel 足够看这两类
 CATALOG_USER = "ayulsam"
-CATALOG_KINDS = frozenset({"custom", "arcade", "test", "test_all"})
+CATALOG_KINDS = frozenset({"custom", "arcade", "test", "test_all", "brit"})
 CATALOG_TYPE_BY_KIND = {
     "custom": "custom",
     "arcade": "arcade",
@@ -36,14 +36,18 @@ CATALOG_KIND_ALIASES = {
     "内测": "test",
     "wip": "test",
     "全内测": "test_all",
+    "brit": "brit",
+    "英国人": "brit",
+    "mendes": "brit",
 }
 CATALOG_KIND_LABELS = {
     "custom": "自制谱",
     "arcade": "街机谱",
     "test": "内测谱",
     "test_all": "全部内测谱",
+    "brit": "英国人谱面",
 }
-SEARCH_KIND_ORDER = ("custom", "arcade", "test")
+SEARCH_KIND_ORDER = ("custom", "arcade", "test", "brit")
 CATALOG_TTL_SEC = 600
 CATALOG_FAIL_COOLDOWN_SEC = 60
 HTTP_UA = "Mozilla/5.0 (compatible; lifebuddy/1.0)"
@@ -58,7 +62,19 @@ def catalog_kind_label(kind: str) -> str:
 
 
 def is_wip_kind(kind: str) -> bool:
-    return kind in ("test", "test_all")
+    return kind in ("test", "test_all", "brit")
+
+
+def song_matches_query(song: dict[str, Any], query: str) -> bool:
+    needle = (query or "").strip().lower()
+    if not needle:
+        return True
+    ext = special_ext_id(song)
+    blob = (
+        f"{song.get('name', '')} {song.get('artist', '')} {song.get('id', '')} "
+        f"{ext or ''} {song_charter(song)}"
+    ).lower()
+    return needle in blob
 
 
 def song_charter(song: dict[str, Any]) -> str:
@@ -258,7 +274,7 @@ class RbdxAPI:
         return str(path)
 
     def _catalog_url_for(self, kind: str) -> str:
-        if kind not in CATALOG_KINDS:
+        if kind not in CATALOG_TYPE_BY_KIND:
             kind = "custom"
         type_name = CATALOG_TYPE_BY_KIND.get(kind, "custom")
         url = f"{self.settings.rbdx_api_base}/downloadall/?type={type_name}"
@@ -269,8 +285,27 @@ class RbdxAPI:
     async def fetch_custom_catalog(self, *, force: bool = False) -> list[dict[str, Any]]:
         return await self.fetch_catalog("custom", force=force)
 
+    async def fetch_brit_catalog(self, *, force: bool = False) -> list[dict[str, Any]]:
+        all_test, inner = await asyncio.gather(
+            self.fetch_catalog("test_all", force=force),
+            self.fetch_catalog("test", force=force),
+        )
+        inner_ids: set[int] = set()
+        for song in inner:
+            try:
+                inner_ids.add(int(song["id"]))
+            except (TypeError, ValueError, KeyError):
+                continue
+        return [
+            song
+            for song in all_test
+            if int(song.get("id") or 0) not in inner_ids
+        ]
+
     async def fetch_catalog(self, kind: str = "custom", *, force: bool = False) -> list[dict[str, Any]]:
-        if kind not in CATALOG_KINDS:
+        if kind == "brit":
+            return await self.fetch_brit_catalog(force=force)
+        if kind not in CATALOG_TYPE_BY_KIND:
             kind = "custom"
         now = time.monotonic()
         cached = self._catalogs.get(kind) or []
@@ -325,9 +360,14 @@ class RbdxAPI:
         return cached
 
     async def random_custom(
-        self, level: int | None = None, kind: str = "custom"
+        self,
+        level: int | None = None,
+        kind: str = "custom",
+        query: str = "",
     ) -> tuple[dict[str, Any], bool] | None:
         songs = await self.fetch_catalog(kind)
+        if query.strip():
+            songs = [song for song in songs if song_matches_query(song, query)]
         return pick_random_song(songs, level)
 
     async def search_published(
@@ -337,21 +377,9 @@ class RbdxAPI:
         if not needle:
             return []
         songs = await self.fetch_catalog(kind)
-        special_ids = {
-            ext
-            for song in songs
-            if (ext := special_ext_id(song)) is not None
-        }
         hits: list[dict[str, Any]] = []
         for song in songs:
-            if is_standalone_special(song, special_ids):
-                continue
-            ext = special_ext_id(song)
-            blob = (
-                f"{song.get('name', '')} {song.get('artist', '')} {song.get('id', '')} "
-                f"{ext or ''} {song_charter(song)}"
-            ).lower()
-            if needle not in blob:
+            if not song_matches_query(song, needle):
                 continue
             hits.append(self._to_search_card(song))
             if limit is not None and len(hits) >= limit:
@@ -590,7 +618,11 @@ class RbdxAPI:
 
     def format_grouped_search(self, groups: dict[str, list[dict[str, Any]]]) -> str:
         blocks: list[str] = []
-        for kind in SEARCH_KIND_ORDER:
+        seen: set[str] = set()
+        for kind in list(SEARCH_KIND_ORDER) + [k for k in groups if k not in SEARCH_KIND_ORDER]:
+            if kind in seen:
+                continue
+            seen.add(kind)
             hits = groups.get(kind) or []
             if not hits:
                 continue

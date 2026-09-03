@@ -4,11 +4,14 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 
 | 触发 | 行为 |
 |------|------|
+| `/help` / `/help rbdx` | 总表 / 某一条用法 |
 | `/ask 问题 选项A 选项B …` | CRC32 伪随机百分比建议 |
 | `/rbdx` / `/rbdx 12` | 随机自制谱，可选指定 B/M/H 等级 |
-| `/rbdx arcade` / `/rbdx test 12` | 随机街机谱 / 内测谱（test 走 `test_inner`，要填 `wip_group_ids`） |
-| `/rbdx test_all` | 全部内测谱（`type=test`，含 Mendes） |
-| `/rb song 关键词` | 按自制 / 街机 / 内测分组列出（含谱师；内测要填 `wip_group_ids`） |
+| `/rbdx arcade ryu` | 随机一首街机里带 ryu 的谱，可再加等级 |
+| `/rbdx test 12` / `/rbdx test_all` | 内测 / 全部内测（要填 `wip_group_ids`） |
+| `/rb song 关键词` | 自制 / 街机分组；开了内测群再加内测和英国人谱面；只中一首带夹克 |
+| `/rb song arcade 关键词` | 只搜某一类（custom / arcade / test / test_all） |
+| `/rb alias add 鸡犬 500100992` | 加别名（SongID 或图片 URL） |
 | `来首XXX` | 搜网易云，回封面 + 曲名/艺术家/专辑/链接 |
 | `YYY是什么歌` | 查群梗夹克 |
 | `/nick 上帝` | QQ→称呼 |
