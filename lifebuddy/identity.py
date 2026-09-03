@@ -72,13 +72,25 @@ def is_admin(event: AstrMessageEvent, context=None) -> bool:
     return qq in {str(x) for x in admins}
 
 
-def observe(event: AstrMessageEvent, store: BuddyStore) -> NickRow | None:
-    qq = sender_qq(event)
-    name = ""
+def group_card(event: AstrMessageEvent) -> str:
     getter = getattr(event, "get_sender_name", None)
     if callable(getter):
-        name = str(getter() or "")
-    return store.observe_speaker(qq, name)
+        return str(getter() or "").strip()
+    return ""
+
+
+def speaker_label(event: AstrMessageEvent, store: BuddyStore | None = None) -> str:
+    qq = sender_qq(event)
+    if store and qq:
+        observe(event, store)
+        row = store.get_nick(qq)
+        if row and row.nick:
+            return row.nick
+    return group_card(event) or qq
+
+
+def observe(event: AstrMessageEvent, store: BuddyStore) -> NickRow | None:
+    return store.observe_speaker(sender_qq(event), group_card(event))
 
 
 def attach_llm_text(req, text: str) -> None:
@@ -101,8 +113,7 @@ def inject_speaker_prompt(event: AstrMessageEvent, req, store: BuddyStore) -> No
     if not qq:
         return
     observe(event, store)
-    nick = store.display_name(qq)
-    attach_llm_text(req, f"[发言者]\nQQ: {qq}\n称呼: {nick}")
+    attach_llm_text(req, f"[发言者]\nQQ: {qq}\n称呼: {speaker_label(event, store)}")
 
 
 async def handle_nick(event: AstrMessageEvent, store: BuddyStore, context=None):

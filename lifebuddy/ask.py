@@ -5,9 +5,12 @@ import random
 
 from astrbot.api.event import AstrMessageEvent
 
+from .identity import speaker_label
+from .store import BuddyStore
 
-async def handle_ask(event: AstrMessageEvent):
-    user_name = event.get_sender_name()
+
+async def handle_ask(event: AstrMessageEvent, store: BuddyStore | None = None):
+    user_name = speaker_label(event, store)
     message_str = event.message_str
     args = message_str.split()
     if len(args) < 4:

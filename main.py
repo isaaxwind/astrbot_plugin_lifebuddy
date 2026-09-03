@@ -60,7 +60,7 @@ class LifeBuddy(Star):
         """ask"""
         observe(event, self.store)
         stop_event(event)
-        async for result in handle_ask(event):
+        async for result in handle_ask(event, self.store):
             yield result
 
     @filter.command("rb")
