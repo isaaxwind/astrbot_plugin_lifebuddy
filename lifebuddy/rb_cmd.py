@@ -6,11 +6,22 @@ from astrbot.api.event import AstrMessageEvent
 from astrbot.api.message_components import At, Image, Plain
 
 from .aliases import AliasStore
-from .identity import group_key, is_admin, is_private_chat, mentioned_qqs, observe, sender_qq
+from .identity import (
+    deny_public_extras,
+    group_key,
+    is_admin,
+    is_private_chat,
+    is_public_group,
+    mentioned_qqs,
+    observe,
+    sender_qq,
+)
 from .lists import require_account, short_api_error
 from .rbdx import RbdxAPI, catalog_kind_label, hide_charter, parse_catalog_kind
 from .settings import Settings
 from .store import BuddyStore
+
+_PUBLIC_RB_ACTIONS = frozenset({"bind", "user", "song"})
 
 
 def _rb_help(event: AstrMessageEvent, runtime: RbRuntime) -> str:
@@ -25,6 +36,13 @@ def _rb_help(event: AstrMessageEvent, runtime: RbRuntime) -> str:
     else:
         bind = "/rb bind  群里不能绑，请私聊机器人"
         song = "/rb song <关键词>  只搜自制谱"
+    if is_public_group(event, runtime.settings):
+        return (
+            "RBDX\n"
+            f"{bind}\n"
+            "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
+            f"{song}"
+        )
     return (
         "RBDX\n"
         f"{bind}\n"
@@ -58,6 +76,12 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
 
     action = args[0].lower()
     rest = args[1:]
+
+    if (
+        deny_public_extras(event, runtime.settings, runtime.context)
+        and action not in _PUBLIC_RB_ACTIONS
+    ):
+        return
 
     if action == "bind":
         async for result in _bind(event, runtime, rest):

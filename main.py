@@ -9,7 +9,14 @@ from .lifebuddy.ask import handle_ask
 from .lifebuddy.dib import handle_dib
 from .lifebuddy.fight import handle_fight
 from .lifebuddy.help_cmd import handle_help
-from .lifebuddy.identity import handle_nick, inject_speaker_prompt, inject_vision, observe, stop_event
+from .lifebuddy.identity import (
+    deny_public_extras,
+    handle_nick,
+    inject_speaker_prompt,
+    inject_vision,
+    observe,
+    stop_event,
+)
 from .lifebuddy.image_cache import ImageCache
 from .lifebuddy.lists import NumberedCache
 from .lifebuddy.netease import NeteaseCloudMusicAPI
@@ -55,11 +62,16 @@ class LifeBuddy(Star):
         async for result in handle_help(event, self.settings):
             yield result
 
+    def _public_blocked(self, event: AstrMessageEvent) -> bool:
+        return deny_public_extras(event, self.settings, self.context)
+
     @filter.command("ask")
     async def ask(self, event: AstrMessageEvent):
         """ask"""
         observe(event, self.store)
         stop_event(event)
+        if self._public_blocked(event):
+            return
         async for result in handle_ask(event, self.store):
             yield result
 
@@ -86,6 +98,8 @@ class LifeBuddy(Star):
     async def nick(self, event: AstrMessageEvent):
         """QQ 称呼：/nick 上帝  或  /nick set <QQ> 上帝"""
         stop_event(event)
+        if self._public_blocked(event):
+            return
         async for result in handle_nick(event, self.store, self.context):
             yield result
 
@@ -93,6 +107,8 @@ class LifeBuddy(Star):
     async def dib(self, event: AstrMessageEvent):
         """口香：/dib 看自己  /dib <曲名>  /dib list"""
         stop_event(event)
+        if self._public_blocked(event):
+            return
         async for result in handle_dib(event, self.store, self.rbdx, self.context):
             yield result
 
@@ -100,6 +116,8 @@ class LifeBuddy(Star):
     async def advice(self, event: AstrMessageEvent):
         """审核：/advice  /advice <编号> 1 正文"""
         stop_event(event)
+        if self._public_blocked(event):
+            return
         async for result in handle_advice(
             event, self.store, self.rbdx, self.settings, self.advice_cache
         ):
@@ -109,6 +127,8 @@ class LifeBuddy(Star):
     async def fight(self, event: AstrMessageEvent):
         """打架：/fight  /fight <编号> <展示值>"""
         stop_event(event)
+        if self._public_blocked(event):
+            return
         async for result in handle_fight(event, self.store, self.rbdx, self.fight_cache):
             yield result
 
@@ -116,6 +136,8 @@ class LifeBuddy(Star):
     async def sym_left(self, event: AstrMessageEvent):
         """左对称：[比例0-100，默认50]"""
         stop_event(event)
+        if self._public_blocked(event):
+            return
         async for result in handle_symmetry(event, self.images, "left"):
             yield result
 
@@ -123,6 +145,8 @@ class LifeBuddy(Star):
     async def sym_right(self, event: AstrMessageEvent):
         """右对称：[比例0-100，默认50]"""
         stop_event(event)
+        if self._public_blocked(event):
+            return
         async for result in handle_symmetry(event, self.images, "right"):
             yield result
 
@@ -130,6 +154,8 @@ class LifeBuddy(Star):
     async def sym_top(self, event: AstrMessageEvent):
         """上对称：[比例0-100，默认50]"""
         stop_event(event)
+        if self._public_blocked(event):
+            return
         async for result in handle_symmetry(event, self.images, "top"):
             yield result
 
@@ -137,6 +163,8 @@ class LifeBuddy(Star):
     async def sym_bottom(self, event: AstrMessageEvent):
         """下对称：[比例0-100，默认50]"""
         stop_event(event)
+        if self._public_blocked(event):
+            return
         async for result in handle_symmetry(event, self.images, "bottom"):
             yield result
 
@@ -144,11 +172,16 @@ class LifeBuddy(Star):
     async def gif_reverse(self, event: AstrMessageEvent):
         """动图倒放"""
         stop_event(event)
+        if self._public_blocked(event):
+            return
         async for result in handle_symmetry(event, self.images, "reverse"):
             yield result
 
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req):
+        if self._public_blocked(event):
+            stop_event(event)
+            return
         inject_speaker_prompt(event, req, self.store)
         try:
             await inject_vision(event, req, self.images)
@@ -165,6 +198,8 @@ class LifeBuddy(Star):
         )
         if natural_song:
             stop_event(event)
+            if self._public_blocked(event):
+                return
         try:
             await ingest_event_image(event, self.images)
         except Exception as exc:

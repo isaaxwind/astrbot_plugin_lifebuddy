@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from astrbot.api.event import AstrMessageEvent
 
-from .identity import group_key, is_private_chat
+from .identity import group_key, is_private_chat, is_public_group
 from .settings import Settings
 
 OVERVIEW = (
@@ -13,11 +13,23 @@ OVERVIEW = (
     "来首XXX  XXX是什么歌"
 )
 
+OVERVIEW_PUBLIC = (
+    "生活好基友\n"
+    "/help <指令>  看某一条的用法\n"
+    "\n"
+    "/rbdx  /rb bind  /rb user  /rb song"
+)
+
 TOPICS: dict[str, str] = {
     "help": (
         "/help  总表\n"
         "/help <指令>  某一条的用法\n"
         "例如 /help rbdx  /help 来首"
+    ),
+    "help_public": (
+        "/help  总表\n"
+        "/help <指令>  某一条的用法\n"
+        "例如 /help rbdx  /help rb"
     ),
     "ask": (
         "/ask <问题> <选项A> <选项B> …\n"
@@ -68,6 +80,12 @@ TOPICS: dict[str, str] = {
         "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
         "/rb recent  最近一局（也可 /rb r）\n"
         "/rb song <关键词>  只搜自制谱"
+    ),
+    "rb_public": (
+        "/rb bind  群里不能绑，请私聊机器人\n"
+        "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
+        "/rb song <关键词>  只搜自制谱\n"
+        "  只中一首时带夹克；超过 20 首不列"
     ),
     "nick": (
         "/nick 上帝  给自己设称呼\n"
@@ -130,6 +148,8 @@ ALIASES = {
     "laishou": "来首",
 }
 
+PUBLIC_TOPIC_KEYS = frozenset({"help", "rbdx", "rb"})
+
 
 def _normalize(token: str) -> str:
     raw = (token or "").strip().lower()
@@ -156,11 +176,22 @@ def _topic_key(args: list[str]) -> str | None:
 async def handle_help(event: AstrMessageEvent, settings: Settings | None = None):
     parts = event.message_str.split()
     args = parts[1:] if parts else []
+    public = bool(settings and is_public_group(event, settings))
+    overview = OVERVIEW_PUBLIC if public else OVERVIEW
     if not args:
-        yield event.plain_result(OVERVIEW)
+        yield event.plain_result(overview)
         return
     key = _topic_key(args)
-    if key == "rb":
+    if public:
+        if key not in PUBLIC_TOPIC_KEYS:
+            yield event.plain_result(f"没有「{' '.join(args)}」这条。\n{overview}")
+            return
+        if key == "help":
+            key = "help_public"
+        elif key == "rb":
+            key = "rb_public"
+        # rbdx stays public-facing docs
+    elif key == "rb":
         if is_private_chat(event):
             key = "rb_private"
         elif settings and settings.allow_restricted(group_key(event)):
@@ -171,4 +202,4 @@ async def handle_help(event: AstrMessageEvent, settings: Settings | None = None)
     if text:
         yield event.plain_result(text)
         return
-    yield event.plain_result(f"没有「{' '.join(args)}」这条。\n{OVERVIEW}")
+    yield event.plain_result(f"没有「{' '.join(args)}」这条。\n{overview}")

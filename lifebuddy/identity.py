@@ -85,6 +85,23 @@ def is_admin(event: AstrMessageEvent, context=None) -> bool:
     return qq in {str(x) for x in admins}
 
 
+def is_public_group(event: AstrMessageEvent, settings) -> bool:
+    """无权限群：非私聊且不在 admin/受限功能白名单里。"""
+    if is_private_chat(event):
+        return False
+    allow = getattr(settings, "allow_restricted", None)
+    if not callable(allow):
+        return False
+    return not bool(allow(group_key(event)))
+
+
+def deny_public_extras(event: AstrMessageEvent, settings, context=None) -> bool:
+    """无权限群里，非管理员不能用 LLM / 来首 / ask 等扩展功能。"""
+    if not is_public_group(event, settings):
+        return False
+    return not is_admin(event, context)
+
+
 def group_card(event: AstrMessageEvent) -> str:
     getter = getattr(event, "get_sender_name", None)
     if callable(getter):
