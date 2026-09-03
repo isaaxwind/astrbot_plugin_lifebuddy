@@ -184,6 +184,9 @@ async def _song(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
     if not flat:
         yield event.plain_result(f"没搜到「{query}」")
         return
+    if len(flat) > 20:
+        yield event.plain_result("曲子太多了！")
+        return
     if len(flat) == 1:
         kind, song = flat[0]
         text = (

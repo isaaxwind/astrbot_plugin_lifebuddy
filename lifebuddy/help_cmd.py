@@ -34,7 +34,7 @@ TOPICS: dict[str, str] = {
         "/rb unbind [QQ或用户名]  仅管理员\n"
         "/rb song [custom|arcade|test|test_all] <关键词>\n"
         "  默认搜自制+街机；开了内测群再加内测和英国人谱面\n"
-        "  只中一首时带夹克\n"
+        "  只中一首时带夹克；超过 20 首不列\n"
         "/rb alias list\n"
         "/rb alias add <别名> <SongID或图片URL>\n"
         "/rb alias del <别名>  仅管理员"
