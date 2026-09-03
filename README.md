@@ -12,7 +12,7 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 | `/rb song 关键词` | 自制 / 街机分组；开了内测群再加内测和英国人谱面；只中一首带夹克 |
 | `/rb song arcade 关键词` | 只搜某一类（custom / arcade / test / test_all）；街机 / 英国人不写谱师 |
 | `/rb alias add 鸡犬 500100992` | 加别名（SongID 或图片 URL） |
-| `来首XXX` | 搜网易云；带图会 OCR 插进曲名，找不到就把原图发回去 |
+| `来首XXX` | 搜网易云；带图直接回未找到，原图留在原位置 |
 | `YYY是什么歌` | 查群梗；自制谱回夹克，remywiki 先试抓图失败再回链接 |
 | `/nick 上帝` | QQ→称呼 |
 | `/dib` | 看自己口香了几天 |
@@ -20,7 +20,7 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 | `/dib list` | 本群口香列表 |
 | `/rb bind <四位数字>` | 绑游戏账号（四位用户ID，须唯一） |
 | `/rb who` | 看自己绑的号 |
-| `/rb recent` / `/rb r` | 最近一局：封面 + 曲名/作者 + 难度 + score + AR + 评级 |
+| `/rb recent` / `/rb r` | 先 @ 发消息的人，再封面 + 曲名/作者 + 难度 + score + AR + 评级 |
 | `/rb who <昵称/QQ/@>` | 反查 QQ 再看别人绑的号 |
 | `/rb unbind` | 管理员解绑 |
 | `/advice` | 审核列表（带编号；管理页 `advice_group_ids` 开群） |

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from astrbot.api.event import AstrMessageEvent
-from astrbot.api.message_components import Image, Plain
+from astrbot.api.message_components import At, Image, Plain
 
 from .aliases import AliasStore
 from .identity import group_key, is_admin, mentioned_qqs, observe, sender_qq
@@ -128,6 +128,19 @@ def _recent_text(play: dict) -> str:
     return "\n".join(lines)
 
 
+def _recent_chain(event: AstrMessageEvent, *parts):
+    qq = sender_qq(event)
+    chain: list = []
+    if qq:
+        chain.append(At(qq=qq))
+        chain.append(Plain("\n"))
+    chain.extend(parts)
+    result = event.make_result()
+    result.chain = chain or [Plain("")]
+    result.use_t2i(False)
+    return result
+
+
 async def _recent(event: AstrMessageEvent, runtime: RbRuntime):
     account, err = require_account(event, runtime.store)
     if err:
@@ -139,20 +152,18 @@ async def _recent(event: AstrMessageEvent, runtime: RbRuntime):
         yield event.plain_result(short_api_error(exc))
         return
     if not play:
-        yield event.plain_result("没有游玩记录")
+        yield _recent_chain(event, Plain("没有游玩记录"))
         return
     text = _recent_text(play)
     song_id = play.get("songId")
     image = ""
     if song_id:
         image = await runtime.rbdx.image_file(runtime.rbdx.jacket_url(int(song_id)))
-    result = event.make_result()
+    parts: list = []
     if image and not image.startswith("http"):
-        result.chain = [Image(file=image), Plain(text)]
-    else:
-        result.chain = [Plain(text)]
-    result.use_t2i(False)
-    yield result
+        parts.append(Image(file=image))
+    parts.append(Plain(text))
+    yield _recent_chain(event, *parts)
 
 
 async def _bind(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):

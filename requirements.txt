@@ -1,3 +1,2 @@
 aiohttp
 Pillow
-rapidocr-onnxruntime
