@@ -69,15 +69,18 @@ def is_wip_kind(kind: str) -> bool:
     return kind in ("test", "test_all", "brit")
 
 
-def song_matches_query(song: dict[str, Any], query: str) -> bool:
+def song_matches_query(song: dict[str, Any], query: str, *, include_id: bool = True) -> bool:
     needle = (query or "").strip().lower()
     if not needle:
         return True
     ext = special_ext_id(song)
-    blob = (
-        f"{song.get('name', '')} {song.get('artist', '')} {song.get('id', '')} "
-        f"{ext or ''} {song_charter(song)}"
-    ).lower()
+    parts = [str(song.get("name", "")), str(song.get("artist", ""))]
+    if include_id:
+        parts.append(str(song.get("id", "")))
+        if ext:
+            parts.append(str(ext))
+    parts.append(song_charter(song))
+    blob = " ".join(parts).lower()
     return needle in blob
 
 
@@ -236,15 +239,108 @@ def jacket_id_for_song(song: dict[str, Any], *, sp: bool = False) -> int:
     return int(song["id"])
 
 
-def parse_level_token(token: str) -> int | None:
+def parse_level_spec(token: str) -> int | str | None:
     raw = token.strip()
     if not raw:
         return None
     lowered = raw.lower().replace("等级", "")
     lowered = lowered.replace("lvl", "").replace("lv", "").strip()
+    if re.fullmatch(r"\d+\.\d+", lowered):
+        major = int(lowered.split(".", 1)[0])
+        if 1 <= major <= 20:
+            return lowered
+        return None
     if re.fullmatch(r"\d+", lowered):
-        return int(lowered)
+        level = int(lowered)
+        if 1 <= level <= 20:
+            return level
     return None
+
+
+def parse_level_token(token: str) -> int | None:
+    spec = parse_level_spec(token)
+    return spec if isinstance(spec, int) else None
+
+
+def _song_chart_labels(song: dict[str, Any]) -> list[tuple[str, bool]]:
+    labels: list[tuple[str, bool]] = []
+    for idx, label in enumerate(list(song.get("levelLabels") or [])[:3]):
+        text = str(label or "").strip()
+        if text:
+            labels.append((text, False))
+    if not labels:
+        for idx, label in enumerate(("B", "M", "H")):
+            bits = diff_level_bits(song, labels=(label,))
+            if bits:
+                labels.append((bits[0][1:], False))
+    special = song.get("special") if isinstance(song.get("special"), dict) else {}
+    sp_label = str((special or {}).get("ExtLevelLabel") or "").strip()
+    if sp_label:
+        labels.append((sp_label, True))
+    elif song_sp_level(song):
+        sp_bits = diff_level_bits(song, labels=("SP",))
+        if sp_bits:
+            labels.append((sp_bits[0][2:], True))
+    return labels
+
+
+def song_level_pick_flags(song: dict[str, Any], level_spec: int | str) -> list[bool]:
+    if isinstance(level_spec, int):
+        flags: list[bool] = []
+        levels = list(song.get("level") or [])
+        for idx, value in enumerate(levels[:3]):
+            try:
+                level = int(value)
+            except (TypeError, ValueError):
+                continue
+            if level > 0 and level == level_spec:
+                flags.append(False)
+        sp = song_sp_level(song)
+        if sp == level_spec:
+            flags.append(True)
+        return flags
+    needle = str(level_spec).lower()
+    return [is_sp for label, is_sp in _song_chart_labels(song) if label.lower() == needle]
+
+
+def build_rbdx_pick_pool(
+    songs: list[dict[str, Any]],
+    level_spec: int | str | None = None,
+    query: str = "",
+) -> list[tuple[dict[str, Any], bool]]:
+    pool: list[tuple[dict[str, Any], bool]] = []
+    seen: set[tuple[int, bool]] = set()
+
+    def add(song: dict[str, Any], is_sp: bool) -> None:
+        try:
+            sid = int(song.get("id") or 0)
+        except (TypeError, ValueError):
+            return
+        key = (sid, is_sp)
+        if key in seen:
+            return
+        seen.add(key)
+        pool.append((song, is_sp))
+
+    if level_spec is not None:
+        for song in songs:
+            for is_sp in song_level_pick_flags(song, level_spec):
+                add(song, is_sp)
+
+    if query.strip():
+        for song in songs:
+            if not song_matches_query(song, query, include_id=False):
+                continue
+            add(song, False)
+            if song_sp_level(song):
+                add(song, True)
+
+    if level_spec is None and not query.strip():
+        for song in songs:
+            add(song, False)
+            if song_sp_level(song):
+                add(song, True)
+    return pool
 
 
 class RbdxAPI:
@@ -459,14 +555,15 @@ class RbdxAPI:
 
     async def random_custom(
         self,
-        level: int | None = None,
+        level_spec: int | str | None = None,
         kind: str = "custom",
         query: str = "",
     ) -> tuple[dict[str, Any], bool] | None:
         songs = await self.fetch_catalog(kind)
-        if query.strip():
-            songs = [song for song in songs if song_matches_query(song, query)]
-        return pick_random_song(songs, level)
+        pool = build_rbdx_pick_pool(songs, level_spec, query)
+        if not pool:
+            return None
+        return random.choice(pool)
 
     async def search_published(
         self, query: str, limit: int | None = None, kind: str = "custom"
