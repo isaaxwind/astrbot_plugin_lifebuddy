@@ -171,16 +171,41 @@ def _resolve_alias_qq(store: BuddyStore, token: str) -> list[str]:
     return [row.qq for row in store.find_nicks(token)]
 
 
+def _alias_lines(store: BuddyStore, qq: str) -> list[str]:
+    names = [name for _, name in store.list_charter_aliases(qq)]
+    label = f"{store.display_name(qq)} ({qq})"
+    if not names:
+        return [f"{label} 没有做谱人对照"]
+    return [f"{label}："] + [f"  {name}" for name in names]
+
+
 async def _nick_alias(event: AstrMessageEvent, store: BuddyStore, context, args: list[str]):
     if not args or args[0].lower() == "list":
+        rest = args[1:] if args else []
+        if rest:
+            if not is_admin(event, context):
+                yield event.plain_result("只有管理员能看别人的对照")
+                return
+            targets = _resolve_alias_qq(store, rest[0])
+            if not targets:
+                yield event.plain_result(f"没找到「{rest[0]}」")
+                return
+            if len(targets) > 1:
+                yield event.plain_result("对上多个人，改用 QQ")
+                return
+            yield event.plain_result("\n".join(_alias_lines(store, targets[0])))
+            return
         rows = store.list_charter_aliases()
         if not rows:
             yield event.plain_result("做谱人对照是空的")
             return
-        lines = []
+        grouped: dict[str, list[str]] = {}
         for qq, charter in rows:
-            lines.append(f"{store.display_name(qq)} ({qq}) = {charter}")
-        yield event.plain_result("做谱人对照：\n" + "\n".join(lines))
+            grouped.setdefault(qq, []).append(charter)
+        blocks = []
+        for qq, names in grouped.items():
+            blocks.append("\n".join(_alias_lines(store, qq)))
+        yield event.plain_result("做谱人对照：\n" + "\n".join(blocks))
         return
     if not is_admin(event, context):
         yield event.plain_result("只有管理员能改做谱人对照")
@@ -189,31 +214,53 @@ async def _nick_alias(event: AstrMessageEvent, store: BuddyStore, context, args:
     rest = args[1:]
     if sub == "add":
         if len(rest) < 2:
-            yield event.plain_result("用法：/nick alias add <称呼或QQ> <做谱人>")
+            yield event.plain_result("用法：/nick alias add <称呼或QQ> <做谱人> [做谱人…]")
             return
         targets = _resolve_alias_qq(store, rest[0])
-        charter = " ".join(rest[1:]).strip()
+        names = [x.strip() for x in rest[1:] if x.strip()]
         if not targets:
             yield event.plain_result(f"没找到「{rest[0]}」")
             return
         if len(targets) > 1:
             yield event.plain_result("对上多个人，改用 QQ")
             return
-        store.add_charter_alias(targets[0], charter)
-        yield event.plain_result(f"{store.display_name(targets[0])} 对齐 {charter}")
+        for name in names:
+            store.add_charter_alias(targets[0], name)
+        yield event.plain_result("\n".join(_alias_lines(store, targets[0])))
         return
     if sub in ("del", "rm", "remove"):
         if len(rest) < 2:
-            yield event.plain_result("用法：/nick alias del <称呼或QQ> <做谱人>")
+            yield event.plain_result("用法：/nick alias del <称呼或QQ> <做谱人> [做谱人…]")
             return
         targets = _resolve_alias_qq(store, rest[0])
-        charter = " ".join(rest[1:]).strip()
+        names = [x.strip() for x in rest[1:] if x.strip()]
         if not targets:
             yield event.plain_result(f"没找到「{rest[0]}」")
             return
-        if store.remove_charter_alias(targets[0], charter):
-            yield event.plain_result(f"已删对照 {charter}")
+        removed = [name for name in names if store.remove_charter_alias(targets[0], name)]
+        if not removed:
+            yield event.plain_result("没有这些对照")
             return
-        yield event.plain_result(f"没有对照 {charter}")
+        yield event.plain_result("已删 " + "、".join(removed))
         return
-    yield event.plain_result("用法：/nick alias add|del|list")
+    if sub in ("clear", "clr", "wipe"):
+        if not rest:
+            yield event.plain_result("用法：/nick alias clear <称呼或QQ>")
+            return
+        targets = _resolve_alias_qq(store, rest[0])
+        if not targets:
+            yield event.plain_result(f"没找到「{rest[0]}」")
+            return
+        if len(targets) > 1:
+            yield event.plain_result("对上多个人，改用 QQ")
+            return
+        n = store.clear_charter_aliases(targets[0])
+        yield event.plain_result(f"已清 {store.display_name(targets[0])} 的 {n} 条对照")
+        return
+    yield event.plain_result(
+        "用法：\n"
+        "/nick alias list [称呼或QQ]\n"
+        "/nick alias add <称呼或QQ> <做谱人> [做谱人…]\n"
+        "/nick alias del <称呼或QQ> <做谱人> [做谱人…]\n"
+        "/nick alias clear <称呼或QQ>"
+    )

@@ -336,6 +336,13 @@ class BuddyStore:
         self._conn.commit()
         return cur.rowcount > 0
 
+    def clear_charter_aliases(self, qq: str) -> int:
+        cur = self._conn.execute(
+            "DELETE FROM charter_aliases WHERE qq = ?", (str(qq).strip(),)
+        )
+        self._conn.commit()
+        return int(cur.rowcount or 0)
+
     def list_charter_aliases(self, qq: str | None = None) -> list[tuple[str, str]]:
         if qq:
             rows = self._conn.execute(

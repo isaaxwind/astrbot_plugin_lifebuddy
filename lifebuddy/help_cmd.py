@@ -44,7 +44,9 @@ TOPICS: dict[str, str] = {
         "/nick 上帝  给自己设称呼\n"
         "/nick list  看本群称呼\n"
         "/nick set <QQ> 上帝  管理员改别人\n"
-        "/nick alias add <称呼或QQ> <做谱人>  管理员对齐做谱人"
+        "/nick alias add <称呼或QQ> <做谱人> [做谱人…]  管理员对齐，可多条\n"
+        "/nick alias list [称呼或QQ]  看对照\n"
+        "/nick alias clear <称呼或QQ>  清掉某人全部对照"
     ),
     "dib": (
         "/dib  看自己口香了几天\n"
