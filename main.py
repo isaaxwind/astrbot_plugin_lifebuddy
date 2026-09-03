@@ -114,28 +114,28 @@ class LifeBuddy(Star):
 
     @filter.command("左对称", alias={"对称左", "对称"})
     async def sym_left(self, event: AstrMessageEvent):
-        """左对称：左半边原样，右半边镜像"""
+        """左对称：[比例0-100，默认50]"""
         stop_event(event)
         async for result in handle_symmetry(event, self.images, "left"):
             yield result
 
     @filter.command("右对称", alias={"对称右"})
     async def sym_right(self, event: AstrMessageEvent):
-        """右对称"""
+        """右对称：[比例0-100，默认50]"""
         stop_event(event)
         async for result in handle_symmetry(event, self.images, "right"):
             yield result
 
     @filter.command("上对称", alias={"对称上"})
     async def sym_top(self, event: AstrMessageEvent):
-        """上对称"""
+        """上对称：[比例0-100，默认50]"""
         stop_event(event)
         async for result in handle_symmetry(event, self.images, "top"):
             yield result
 
     @filter.command("下对称", alias={"对称下"})
     async def sym_bottom(self, event: AstrMessageEvent):
-        """下对称"""
+        """下对称：[比例0-100，默认50]"""
         stop_event(event)
         async for result in handle_symmetry(event, self.images, "bottom"):
             yield result

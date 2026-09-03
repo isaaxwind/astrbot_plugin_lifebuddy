@@ -102,6 +102,61 @@ def _looks_like_image(data: bytes) -> bool:
     return data.startswith((b"\x89PNG", b"\xff\xd8\xff", b"RIFF", b"GIF8"))
 
 
+def format_level_label(level: int, subdiff: int = 0) -> str:
+    if level <= 0:
+        return ""
+    if subdiff <= 0:
+        return str(level)
+    if level in (10, 12):
+        return f"12.{subdiff}"
+    if level == 13:
+        return f"13.{subdiff}"
+    if level == 14:
+        return f"14.{subdiff - 8}"
+    if level == 15:
+        return f"15.{subdiff}"
+    if level == 16:
+        return f"16.{subdiff - 8}"
+    return str(level)
+
+
+def diff_level_bits(
+    song: dict[str, Any],
+    *,
+    labels: tuple[str, ...] = ("B", "M", "H"),
+) -> list[str]:
+    levels = list(song.get("level") or [])
+    subdiffs = list(song.get("subdiff") or [])
+    level_labels = list(song.get("levelLabels") or [])
+    bits: list[str] = []
+    for idx, label in enumerate(labels):
+        try:
+            level = int(levels[idx] if idx < len(levels) else 0)
+        except (TypeError, ValueError):
+            level = 0
+        if level <= 0:
+            continue
+        if idx < len(level_labels) and level_labels[idx]:
+            bits.append(f"{label}{level_labels[idx]}")
+            continue
+        try:
+            subdiff = int(subdiffs[idx] if idx < len(subdiffs) else 0)
+        except (TypeError, ValueError):
+            subdiff = 0
+        shown = format_level_label(level, subdiff)
+        bits.append(f"{label}{shown}")
+    sp = song_sp_level(song)
+    if sp:
+        special = song.get("special") if isinstance(song.get("special"), dict) else {}
+        sp_label = str((special or {}).get("ExtLevelLabel") or "")
+        if sp_label:
+            bits.append(f"SP{sp_label}")
+        else:
+            sp_sub = int((special or {}).get("ExtSubdiff") or 0)
+            bits.append(f"SP{format_level_label(sp, sp_sub)}")
+    return bits
+
+
 def song_sp_level(song: dict[str, Any]) -> int | None:
     special = song.get("special")
     if not isinstance(special, dict):
@@ -329,7 +384,7 @@ class RbdxAPI:
         if kind not in CATALOG_TYPE_BY_KIND:
             kind = "custom"
         type_name = CATALOG_TYPE_BY_KIND.get(kind, "custom")
-        url = f"{self.settings.rbdx_api_base}/downloadall/?type={type_name}"
+        url = f"{self.settings.rbdx_api_base}/bot/downloadall/?type={type_name}"
         if kind in ("arcade", "test", "test_all"):
             url += f"&user={CATALOG_USER}"
         return url
@@ -449,6 +504,8 @@ class RbdxAPI:
     def _to_search_card(self, song: dict[str, Any]) -> dict[str, Any]:
         levels = active_levels(song)
         padded = (song.get("level") or []) + [0, 0, 0]
+        subdiffs = (song.get("subdiff") or []) + [0, 0, 0]
+        level_labels = (song.get("levelLabels") or []) + ["", "", ""]
         return {
             "id": int(song["id"]),
             "name": song.get("name") or "",
@@ -462,7 +519,21 @@ class RbdxAPI:
                 "h": padded[2] or None,
                 "sp": song_sp_level(song),
             },
+            "subdiffs": {
+                "b": subdiffs[0] or None,
+                "n": subdiffs[1] or None,
+                "h": subdiffs[2] or None,
+                "sp": int((song.get("special") or {}).get("ExtSubdiff") or 0) or None,
+            },
+            "levelLabels": {
+                "b": level_labels[0] or None,
+                "n": level_labels[1] or None,
+                "h": level_labels[2] or None,
+                "sp": (song.get("special") or {}).get("ExtLevelLabel"),
+            },
             "matched_levels": levels,
+            "level": song.get("level"),
+            "subdiff": song.get("subdiff"),
         }
 
     def _bot_headers(self) -> dict[str, str]:
@@ -680,18 +751,7 @@ class RbdxAPI:
     ) -> str:
         name = song.get("name") or ""
         artist = song.get("artist") or ""
-        padded = (song.get("level") or []) + [0, 0, 0]
-        bits = []
-        for label, value in zip(("B", "M", "H"), padded):
-            try:
-                n = int(value)
-            except (TypeError, ValueError):
-                n = 0
-            if n > 0:
-                bits.append(f"{label}{n}")
-        sp = song_sp_level(song)
-        if sp:
-            bits.append(f"SP{sp}")
+        bits = diff_level_bits(song)
         lines = [name, artist]
         charter = song_charter(song)
         if show_charter and charter:
@@ -717,10 +777,22 @@ class RbdxAPI:
         if pack_id is not None:
             pack_bit = f"{pack_name} ({pack_id})".strip()
         level_bits = []
+        level_labels = song.get("levelLabels") or {}
+        subdiffs = song.get("subdiffs") or {}
         for key, label in (("b", "B"), ("n", "M"), ("h", "H"), ("sp", "SP")):
+            shown = level_labels.get(key)
+            if shown:
+                level_bits.append(f"{label}{shown}")
+                continue
             value = levels.get(key)
-            if value:
-                level_bits.append(f"{label}{value}")
+            if not value:
+                continue
+            sub = subdiffs.get(key) or 0
+            try:
+                sub = int(sub)
+            except (TypeError, ValueError):
+                sub = 0
+            level_bits.append(f"{label}{format_level_label(int(value), sub)}")
         extra = "  ".join(x for x in (pack_bit, " ".join(level_bits)) if x)
         if extra:
             lines.append(extra)

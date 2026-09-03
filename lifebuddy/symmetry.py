@@ -235,47 +235,60 @@ async def resolve_image_bytes(event: AstrMessageEvent, cache: ImageCache) -> byt
     return None
 
 
-def _mirror_left(img: PILImage.Image) -> PILImage.Image:
+def _keep_size(total: int, ratio: int) -> int:
+    return max(1, total * max(0, min(100, ratio)) // 100)
+
+
+def parse_symmetry_ratio(event: AstrMessageEvent) -> int:
+    for token in (event.message_str or "").split()[1:]:
+        if token.isdigit():
+            value = int(token)
+            if 0 <= value <= 100:
+                return value
+    return 50
+
+
+def _mirror_left(img: PILImage.Image, ratio: int = 50) -> PILImage.Image:
     w, h = img.size
-    keep_w = max(1, (w + 1) // 2)
+    keep_w = _keep_size(w, ratio)
     keep = img.crop((0, 0, keep_w, h))
     mirror = keep.transpose(PILImage.Transpose.FLIP_LEFT_RIGHT)
-    out = PILImage.new("RGBA", (w, h))
+    out = PILImage.new("RGBA", (keep_w * 2, h))
     out.paste(keep, (0, 0))
-    out.paste(mirror, (w - keep_w, 0))
+    out.paste(mirror, (keep_w, 0))
     return out
 
 
-def _mirror_right(img: PILImage.Image) -> PILImage.Image:
+def _mirror_right(img: PILImage.Image, ratio: int = 50) -> PILImage.Image:
     w, h = img.size
-    keep_w = max(1, (w + 1) // 2)
+    keep_w = _keep_size(w, ratio)
     keep = img.crop((w - keep_w, 0, w, h))
     mirror = keep.transpose(PILImage.Transpose.FLIP_LEFT_RIGHT)
-    out = PILImage.new("RGBA", (w, h))
+    out = PILImage.new("RGBA", (keep_w * 2, h))
     out.paste(mirror, (0, 0))
-    out.paste(keep, (w - keep_w, 0))
+    out.paste(keep, (keep_w, 0))
     return out
 
 
-def _mirror_top(img: PILImage.Image) -> PILImage.Image:
+def _mirror_top(img: PILImage.Image, ratio: int = 50) -> PILImage.Image:
     w, h = img.size
-    keep_h = max(1, (h + 1) // 2)
+    keep_h = _keep_size(h, ratio)
     keep = img.crop((0, 0, w, keep_h))
     mirror = keep.transpose(PILImage.Transpose.FLIP_TOP_BOTTOM)
-    out = PILImage.new("RGBA", (w, h))
+    out = PILImage.new("RGBA", (w, keep_h * 2))
     out.paste(keep, (0, 0))
-    out.paste(mirror, (0, h - keep_h))
+    out.paste(mirror, (0, keep_h))
     return out
 
 
-def _mirror_bottom(img: PILImage.Image) -> PILImage.Image:
+def _mirror_bottom(img: PILImage.Image, ratio: int = 50) -> PILImage.Image:
     w, h = img.size
-    keep_h = max(1, (h + 1) // 2)
+    keep_h = _keep_size(h, ratio)
     keep = img.crop((0, h - keep_h, w, h))
     mirror = keep.transpose(PILImage.Transpose.FLIP_TOP_BOTTOM)
-    out = PILImage.new("RGBA", (w, h))
+    out = PILImage.new("RGBA", (w, keep_h * 2))
     out.paste(mirror, (0, 0))
-    out.paste(keep, (0, h - keep_h))
+    out.paste(keep, (0, keep_h))
     return out
 
 
@@ -332,9 +345,10 @@ def _save_png(img: PILImage.Image) -> bytes:
     return out.getvalue()
 
 
-def process_image(data: bytes, action: str) -> tuple[bytes, str]:
+def process_image(data: bytes, action: str, ratio: int = 50) -> tuple[bytes, str]:
     if len(data) > MAX_INPUT_BYTES:
         raise ValueError("图太大了")
+    ratio = max(0, min(100, int(ratio)))
     frames, durations, animated, loop = _load_frames(data)
     if action == "reverse":
         if animated:
@@ -348,7 +362,7 @@ def process_image(data: bytes, action: str) -> tuple[bytes, str]:
             return _save_gif(flipped, durations, loop), ".gif"
         return _save_png(flipped[0]), ".png"
     fn = _MIRROR[action]
-    processed = [fn(frame) for frame in frames]
+    processed = [fn(frame, ratio) for frame in frames]
     if animated:
         return _save_gif(processed, durations, loop), ".gif"
     return _save_png(processed[0]), ".png"
@@ -361,6 +375,7 @@ def _write_temp(data: bytes, suffix: str) -> str:
 
 
 async def handle_symmetry(event: AstrMessageEvent, cache: ImageCache, action: str):
+    ratio = parse_symmetry_ratio(event)
     try:
         raw = await resolve_image_bytes(event, cache)
     except Exception:
@@ -372,7 +387,7 @@ async def handle_symmetry(event: AstrMessageEvent, cache: ImageCache, action: st
         yield event.plain_result("头像拿不到")
         return
     try:
-        out, suffix = await asyncio.to_thread(process_image, raw, action)
+        out, suffix = await asyncio.to_thread(process_image, raw, action, ratio)
     except ValueError as exc:
         yield event.plain_result(str(exc))
         return
