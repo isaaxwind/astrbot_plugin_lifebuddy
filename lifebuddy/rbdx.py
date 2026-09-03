@@ -603,7 +603,7 @@ class RbdxAPI:
             lines.append(" / ".join(bits))
         return "\n".join(lines)
 
-    def format_song_text(self, song: dict[str, Any]) -> str:
+    def format_song_text(self, song: dict[str, Any], *, show_charter: bool = True) -> str:
         name = song.get("name", "")
         artist = song.get("artist", "")
         chart_author = song_charter(song) or (song.get("chart_author") or "")
@@ -614,7 +614,7 @@ class RbdxAPI:
         song_id = song.get("id")
         if song_id not in (None, ""):
             lines.append(f"ID {song_id}")
-        if chart_author:
+        if show_charter and chart_author:
             lines.append(f"谱师 {chart_author}")
         pack_bit = pack_name
         if pack_id is not None:
@@ -639,7 +639,9 @@ class RbdxAPI:
             hits = groups.get(kind) or []
             if not hits:
                 continue
-            body = "\n\n".join(self.format_song_text(song) for song in hits)
+            body = "\n\n".join(
+                self.format_song_text(song, show_charter=kind != "brit") for song in hits
+            )
             blocks.append(f"{catalog_kind_label(kind)}：\n{body}")
         return "\n\n".join(blocks)
 

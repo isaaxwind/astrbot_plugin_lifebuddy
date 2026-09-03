@@ -186,7 +186,10 @@ async def _song(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
         return
     if len(flat) == 1:
         kind, song = flat[0]
-        text = f"{catalog_kind_label(kind)}\n{runtime.rbdx.format_song_text(song)}"
+        text = (
+            f"{catalog_kind_label(kind)}\n"
+            f"{runtime.rbdx.format_song_text(song, show_charter=kind != 'brit')}"
+        )
         image = await runtime.rbdx.image_file(
             runtime.rbdx.jacket_url(int(song["id"]))
         )
