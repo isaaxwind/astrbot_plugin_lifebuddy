@@ -514,6 +514,13 @@ class RbdxAPI:
             raise last_error
         raise RuntimeError(f"bot api {path} failed")
 
+    async def fetch_recent_play(self, account_name: str) -> dict[str, Any] | None:
+        data = await self._bot_request(
+            "GET", "/recent", params={"accountName": account_name}
+        )
+        play = data.get("play") if isinstance(data, dict) else None
+        return play if isinstance(play, dict) else None
+
     async def lookup_accounts_by_player_id(self, player_id: str) -> list[str]:
         data = await self._bot_request("GET", "/accounts", params={"playerId": player_id})
         accounts = data.get("accounts") if isinstance(data, dict) else None

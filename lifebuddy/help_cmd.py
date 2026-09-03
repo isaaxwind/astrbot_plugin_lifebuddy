@@ -31,6 +31,7 @@ TOPICS: dict[str, str] = {
         "/rb bind <四位用户ID>  绑号，须唯一\n"
         "/rb who  看自己绑的号\n"
         "/rb who <昵称/QQ/@>  查别人绑的号\n"
+        "/rb recent  最近一局（也可 /rb r）\n"
         "/rb unbind [QQ或用户名]  仅管理员\n"
         "/rb song [custom|arcade|test|test_all] <关键词>\n"
         "  默认搜自制+街机；开了内测群再加内测和英国人谱面\n"

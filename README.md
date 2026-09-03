@@ -20,6 +20,7 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 | `/dib list` | 本群口香列表 |
 | `/rb bind <四位数字>` | 绑游戏账号（四位用户ID，须唯一） |
 | `/rb who` | 看自己绑的号 |
+| `/rb recent` / `/rb r` | 最近一局：封面 + 曲名/作者 + 难度 + score + AR + 评级 |
 | `/rb who <昵称/QQ/@>` | 反查 QQ 再看别人绑的号 |
 | `/rb unbind` | 管理员解绑 |
 | `/advice` | 审核列表（带编号；管理页 `advice_group_ids` 开群） |

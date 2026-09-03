@@ -7,7 +7,7 @@ from astrbot.api.message_components import Image, Plain
 
 from .aliases import AliasStore
 from .identity import group_key, is_admin, mentioned_qqs, observe, sender_qq
-from .lists import short_api_error
+from .lists import require_account, short_api_error
 from .rbdx import RbdxAPI, catalog_kind_label, is_wip_kind, parse_catalog_kind
 from .settings import Settings
 from .store import BuddyStore
@@ -16,6 +16,7 @@ HELP = (
     "RBDX\n"
     "/rb bind <四位用户ID>\n"
     "/rb who [昵称/QQ/@]\n"
+    "/rb recent  （/rb r）\n"
     "/rb unbind [QQ或用户名]  （仅管理员）\n"
     "/rb song [custom|arcade|test|test_all] <关键词>\n"
     "/rb alias list\n"
@@ -54,6 +55,10 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
         return
     if action == "who":
         async for result in _who(event, runtime, rest):
+            yield result
+        return
+    if action in ("recent", "r"):
+        async for result in _recent(event, runtime):
             yield result
         return
 
@@ -104,6 +109,50 @@ async def _who(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
         yield event.plain_result(f"没找到「{query}」")
         return
     yield event.plain_result("\n".join(_who_line(runtime, row.qq) for row in rows))
+
+
+def _recent_text(play: dict) -> str:
+    title = str(play.get("title") or play.get("songId") or "???")
+    artist = str(play.get("artist") or "")
+    diff = str(play.get("difficultyLabel") or play.get("difficulty") or "?")
+    level = play.get("level")
+    if level:
+        diff = f"{diff}{level}"
+    score = play.get("score", 0)
+    ar = play.get("ar", 0)
+    rank = str(play.get("rank") or "")
+    lines = [title]
+    if artist:
+        lines.append(artist)
+    lines.append(f"{diff}  {score}  AR {ar}  {rank}".rstrip())
+    return "\n".join(lines)
+
+
+async def _recent(event: AstrMessageEvent, runtime: RbRuntime):
+    account, err = require_account(event, runtime.store)
+    if err:
+        yield event.plain_result(err)
+        return
+    try:
+        play = await runtime.rbdx.fetch_recent_play(account)
+    except Exception as exc:
+        yield event.plain_result(short_api_error(exc))
+        return
+    if not play:
+        yield event.plain_result("没有游玩记录")
+        return
+    text = _recent_text(play)
+    song_id = play.get("songId")
+    image = ""
+    if song_id:
+        image = await runtime.rbdx.image_file(runtime.rbdx.jacket_url(int(song_id)))
+    result = event.make_result()
+    if image and not image.startswith("http"):
+        result.chain = [Image(file=image), Plain(text)]
+    else:
+        result.chain = [Plain(text)]
+    result.use_t2i(False)
+    yield result
 
 
 async def _bind(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
