@@ -57,6 +57,10 @@ def parse_catalog_kind(token: str) -> str | None:
     return CATALOG_KIND_ALIASES.get((token or "").strip().lower())
 
 
+def hide_charter(kind: str) -> bool:
+    return kind in ("brit", "arcade")
+
+
 def catalog_kind_label(kind: str) -> str:
     return CATALOG_KIND_LABELS.get(kind, "自制谱")
 
@@ -514,6 +518,16 @@ class RbdxAPI:
             raise last_error
         raise RuntimeError(f"bot api {path} failed")
 
+    async def fetch_song_meta(
+        self, song_id: int, difficulty: int | None = None
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {"songId": int(song_id)}
+        if difficulty is not None:
+            params["difficulty"] = int(difficulty)
+        data = await self._bot_request("GET", "/song", params=params)
+        song = data.get("song") if isinstance(data, dict) else None
+        return song if isinstance(song, dict) else None
+
     async def fetch_recent_play(self, account_name: str) -> dict[str, Any] | None:
         data = await self._bot_request(
             "GET", "/recent", params={"accountName": account_name}
@@ -625,7 +639,9 @@ class RbdxAPI:
         _ = (name, include_wip)
         return None
 
-    def format_catalog_song(self, song: dict[str, Any], level: int | None = None) -> str:
+    def format_catalog_song(
+        self, song: dict[str, Any], level: int | None = None, *, show_charter: bool = True
+    ) -> str:
         name = song.get("name") or ""
         artist = song.get("artist") or ""
         padded = (song.get("level") or []) + [0, 0, 0]
@@ -642,7 +658,7 @@ class RbdxAPI:
             bits.append(f"SP{sp}")
         lines = [name, artist]
         charter = song_charter(song)
-        if charter:
+        if show_charter and charter:
             lines.append(f"谱师 {charter}")
         if bits:
             lines.append(" / ".join(bits))
@@ -685,7 +701,7 @@ class RbdxAPI:
             if not hits:
                 continue
             body = "\n\n".join(
-                self.format_song_text(song, show_charter=kind != "brit") for song in hits
+                self.format_song_text(song, show_charter=not hide_charter(kind)) for song in hits
             )
             blocks.append(f"{catalog_kind_label(kind)}：\n{body}")
         return "\n\n".join(blocks)

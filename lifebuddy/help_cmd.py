@@ -43,7 +43,8 @@ TOPICS: dict[str, str] = {
     "nick": (
         "/nick 上帝  给自己设称呼\n"
         "/nick list  看本群称呼\n"
-        "/nick set <QQ> 上帝  管理员改别人"
+        "/nick set <QQ> 上帝  管理员改别人\n"
+        "/nick alias add <称呼或QQ> <做谱人>  管理员对齐做谱人"
     ),
     "dib": (
         "/dib  看自己口香了几天\n"
@@ -64,8 +65,8 @@ TOPICS: dict[str, str] = {
         "先 /rb bind"
     ),
     "来首": (
-        "来首XXX  先搜自制谱，没有再回网易云\n"
-        "回夹克 + 曲名 / 艺术家 / 等级或专辑链接"
+        "来首XXX  搜网易云；和图片一起发会 OCR 插进曲名\n"
+        "找不到就把原图发回去"
     ),
     "是什么歌": (
         "XXX是什么歌  查群梗别名\n"

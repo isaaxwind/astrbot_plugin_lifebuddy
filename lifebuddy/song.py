@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from astrbot.api.event import AstrMessageEvent
 from astrbot.api.message_components import Image, Plain
 
 from .aliases import AliasStore
 from .identity import stop_event
-from .messages import has_image_by_classname, has_image_by_isinstance
+from .messages import has_image_by_isinstance
 from .netease import NeteaseCloudMusicAPI
+from .ocr import ocr_bytes
 from .rbdx import RbdxAPI
 from .settings import Settings
+from .symmetry import _is_image, _is_reply, _read_component_bytes, _write_temp, message_chain
 
 
 class SongRuntime:
@@ -37,20 +41,30 @@ async def handle_natural_song(event: AstrMessageEvent, runtime: SongRuntime):
 
 
 async def _handle_lai_shou(event: AstrMessageEvent, runtime: SongRuntime):
-    if has_image_by_classname(event):
+    songname, local_images = await _lai_shou_query(event)
+    if songname is None:
+        return
+
+    if not songname:
         stop_event(event)
-        yield event.plain_result("我暂时发不了图片，操你妈的")
+        result = event.make_result()
+        chain = [Image(file=path) for path in local_images]
+        chain.append(Plain("未找到歌曲"))
+        result.chain = chain
+        result.use_t2i(False)
+        yield result
         return
 
-    msg_str = event.message_str
-    if len(msg_str) <= 2:
-        return
-
-    songname = msg_str[2:].strip()
     songs = await runtime.netease.fetch_song_data(songname, limit=1, pic=True)
     if not songs:
         stop_event(event)
-        yield event.plain_result(f"未找到歌曲{songname}")
+        text = f"未找到歌曲{songname}" if songname else "未找到歌曲"
+        result = event.make_result()
+        chain = [Image(file=path) for path in local_images]
+        chain.append(Plain(text))
+        result.chain = chain
+        result.use_t2i(False)
+        yield result
         return
 
     song = songs[0]
@@ -68,6 +82,51 @@ async def _handle_lai_shou(event: AstrMessageEvent, runtime: SongRuntime):
     result.use_t2i(False)
     stop_event(event)
     yield result
+
+
+async def _lai_shou_query(event: AstrMessageEvent) -> tuple[str | None, list[str]]:
+    parts: list[str] = []
+    images: list[str] = []
+    for item in message_chain(event):
+        if _is_reply(item):
+            continue
+        if _is_image(item):
+            path = ""
+            data = b""
+            convert = getattr(item, "convert_to_file_path", None)
+            if callable(convert):
+                try:
+                    path = str(await convert() or "")
+                except Exception:
+                    path = ""
+            if path:
+                try:
+                    data = Path(path).read_bytes()
+                except Exception:
+                    data = b""
+            if not data:
+                data = await _read_component_bytes(item) or b""
+                if data:
+                    path = _write_temp(data, ".png")
+            if path:
+                images.append(path)
+            parts.append(await ocr_bytes(data) if data else "")
+            continue
+        text = getattr(item, "text", None)
+        if text:
+            parts.append(str(text))
+    combined = "".join(parts).strip()
+    raw = (event.message_str or "").strip()
+    if not combined.startswith("来首") and raw.startswith("来首"):
+        rest = raw[2:]
+        ocr_bits = "".join(parts)
+        combined = "来首" + rest + ocr_bits
+    if not combined.startswith("来首") and not raw.startswith("来首"):
+        return None, []
+    songname = combined[2:].strip() if combined.startswith("来首") else raw[2:].strip()
+    if not songname and not images:
+        return None, []
+    return songname, images
 
 
 async def _handle_what_song(event: AstrMessageEvent, runtime: SongRuntime):

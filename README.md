@@ -7,12 +7,12 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 | `/help` / `/help rbdx` | 总表 / 某一条用法 |
 | `/ask 问题 选项A 选项B …` | 帮你选，不问算法 |
 | `/rbdx` / `/rbdx 12` | 随机自制谱，可选指定 B/M/H 等级 |
-| `/rbdx arcade ryu` | 随机一首街机里带 ryu 的谱，可再加等级 |
+| `/rbdx arcade ryu` | 随机一首街机里带 ryu 的谱，可再加等级；街机不显示谱师 |
 | `/rbdx test 12` / `/rbdx test_all` | 内测 / 全部内测（要填 `wip_group_ids`） |
 | `/rb song 关键词` | 自制 / 街机分组；开了内测群再加内测和英国人谱面；只中一首带夹克 |
-| `/rb song arcade 关键词` | 只搜某一类（custom / arcade / test / test_all） |
+| `/rb song arcade 关键词` | 只搜某一类（custom / arcade / test / test_all）；街机 / 英国人不写谱师 |
 | `/rb alias add 鸡犬 500100992` | 加别名（SongID 或图片 URL） |
-| `来首XXX` | 搜网易云，回封面 + 曲名/艺术家/专辑/链接 |
+| `来首XXX` | 搜网易云；带图会 OCR 插进曲名，找不到就把原图发回去 |
 | `YYY是什么歌` | 查群梗；自制谱回夹克，remywiki 先试抓图失败再回链接 |
 | `/nick 上帝` | QQ→称呼 |
 | `/dib` | 看自己口香了几天 |

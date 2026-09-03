@@ -80,6 +80,11 @@ class BuddyStore:
                 account_name TEXT NOT NULL UNIQUE,
                 created_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS charter_aliases (
+                qq TEXT NOT NULL,
+                charter TEXT NOT NULL,
+                PRIMARY KEY (qq, charter)
+            );
             """
         )
         self._conn.commit()
@@ -308,6 +313,53 @@ class BuddyStore:
             self._conn.commit()
             return name
         return None
+
+    def add_charter_alias(self, qq: str, charter: str) -> bool:
+        qq = str(qq).strip()
+        charter = charter.strip()
+        if not qq or not charter:
+            return False
+        self._conn.execute(
+            "INSERT OR IGNORE INTO charter_aliases(qq, charter) VALUES (?, ?)",
+            (qq, charter),
+        )
+        self._conn.commit()
+        return True
+
+    def remove_charter_alias(self, qq: str, charter: str) -> bool:
+        qq = str(qq).strip()
+        charter = charter.strip()
+        cur = self._conn.execute(
+            "DELETE FROM charter_aliases WHERE qq = ? AND charter = ? COLLATE NOCASE",
+            (qq, charter),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    def list_charter_aliases(self, qq: str | None = None) -> list[tuple[str, str]]:
+        if qq:
+            rows = self._conn.execute(
+                "SELECT qq, charter FROM charter_aliases WHERE qq = ? ORDER BY charter COLLATE NOCASE",
+                (str(qq),),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT qq, charter FROM charter_aliases ORDER BY qq, charter COLLATE NOCASE"
+            ).fetchall()
+        return [(str(r["qq"]), str(r["charter"])) for r in rows]
+
+    def charter_names(self, qq: str) -> list[str]:
+        names: list[str] = []
+        row = self.get_nick(qq)
+        if row:
+            if row.nick:
+                names.append(row.nick)
+            if row.last_seen_name and row.last_seen_name not in names:
+                names.append(row.last_seen_name)
+        for _, charter in self.list_charter_aliases(qq):
+            if charter not in names:
+                names.append(charter)
+        return names
 
 
 def _dib(row: sqlite3.Row) -> DibRow:

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from astrbot.api.event import AstrMessageEvent
 
-from .identity import group_key, observe
+from .identity import group_key, observe, sender_qq
 from .lists import DIFF_LABEL, NumberedCache, parse_is_ok, require_account, short_api_error
+from .own_chart import is_own_by_charter, is_own_by_uploader, own_chart_result
 from .rbdx import RbdxAPI
 from .settings import Settings
 from .store import BuddyStore
@@ -55,10 +56,27 @@ async def handle_advice(
         if song_id is None:
             yield event.plain_result("编号或 SongID 对不上，先 /advice 看列表")
             return
+        token = args[0].strip()
         rest = args[1:]
         if not rest:
             text = await _render_comments(rbdx, song_id, title)
             yield event.plain_result(text)
+            return
+        item = None
+        if token.isdigit():
+            n = int(token)
+            if 1 <= n <= len(items):
+                item = items[n - 1]
+        if item is None:
+            for row in items:
+                if int(row.get("songId") or 0) == song_id:
+                    item = row
+                    break
+        creator, author = await _people(rbdx, item, song_id)
+        qq = sender_qq(event)
+        if is_own_by_charter(store, qq, author) or is_own_by_uploader(account, creator):
+            async for result in own_chart_result(event, "advice"):
+                yield result
             return
         flag = parse_is_ok(rest[0])
         if flag is None:
@@ -112,6 +130,20 @@ def _resolve_song(token: str, items: list) -> tuple[int | None, str]:
                     return n, str(item.get("title") or n)
             return n, str(n)
     return None, ""
+
+
+async def _people(rbdx: RbdxAPI, item: dict | None, song_id: int) -> tuple[str, str]:
+    creator = str((item or {}).get("creator") or "")
+    author = str((item or {}).get("chartAuthor") or (item or {}).get("chart_author") or "")
+    if creator or author:
+        return creator, author
+    try:
+        meta = await rbdx.fetch_song_meta(song_id)
+    except Exception:
+        return "", ""
+    if not meta:
+        return "", ""
+    return str(meta.get("creator") or ""), str(meta.get("chartAuthor") or "")
 
 
 async def _render_comments(rbdx: RbdxAPI, song_id: int, title: str) -> str:

@@ -8,7 +8,7 @@ from astrbot.api.message_components import Image, Plain
 from .aliases import AliasStore
 from .identity import group_key, is_admin, mentioned_qqs, observe, sender_qq
 from .lists import require_account, short_api_error
-from .rbdx import RbdxAPI, catalog_kind_label, is_wip_kind, parse_catalog_kind
+from .rbdx import RbdxAPI, catalog_kind_label, hide_charter, is_wip_kind, parse_catalog_kind
 from .settings import Settings
 from .store import BuddyStore
 
@@ -240,7 +240,7 @@ async def _song(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
         kind, song = flat[0]
         text = (
             f"{catalog_kind_label(kind)}\n"
-            f"{runtime.rbdx.format_song_text(song, show_charter=kind != 'brit')}"
+            f"{runtime.rbdx.format_song_text(song, show_charter=not hide_charter(kind))}"
         )
         image = await runtime.rbdx.image_file(
             runtime.rbdx.jacket_url(int(song["id"]))

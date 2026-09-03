@@ -7,6 +7,7 @@ from .identity import group_key
 from .rbdx import (
     RbdxAPI,
     catalog_kind_label,
+    hide_charter,
     is_wip_kind,
     jacket_id_for_song,
     parse_catalog_kind,
@@ -66,7 +67,7 @@ async def handle_rbdx(event: AstrMessageEvent, rbdx: RbdxAPI, settings: Settings
         return
 
     song, is_sp = picked
-    text = rbdx.format_catalog_song(song, level)
+    text = rbdx.format_catalog_song(song, level, show_charter=not hide_charter(kind))
     image = await rbdx.image_file(rbdx.jacket_url(jacket_id_for_song(song, sp=is_sp)))
     result = event.make_result()
     if image and not image.startswith("http"):

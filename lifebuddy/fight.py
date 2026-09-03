@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from astrbot.api.event import AstrMessageEvent
 
-from .identity import group_key, observe
+from .identity import group_key, observe, sender_qq
 from .lists import DIFF_LABEL, NumberedCache, require_account, short_api_error
+from .own_chart import is_own_by_charter, own_chart_result
 from .rbdx import RbdxAPI
 from .store import BuddyStore
 
@@ -51,6 +52,20 @@ async def handle_fight(
         chart = cache.resolve_index(gid, args[0])
         if chart is None:
             yield event.plain_result("编号对不上，先 /fight 看列表")
+            return
+        author = str(chart.get("chartAuthor") or chart.get("chart_author") or "")
+        if not author:
+            try:
+                meta = await rbdx.fetch_song_meta(
+                    int(chart["songId"]), int(chart.get("difficulty") or 0)
+                )
+            except Exception:
+                meta = None
+            if meta:
+                author = str(meta.get("chartAuthor") or "")
+        if is_own_by_charter(store, sender_qq(event), author):
+            async for result in own_chart_result(event, "fight"):
+                yield result
             return
         display = int(args[1])
         vote_range = [int(x) for x in (chart.get("voteRange") or [])]

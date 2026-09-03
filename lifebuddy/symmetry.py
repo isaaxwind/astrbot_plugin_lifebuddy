@@ -337,11 +337,16 @@ def process_image(data: bytes, action: str) -> tuple[bytes, str]:
         raise ValueError("图太大了")
     frames, durations, animated, loop = _load_frames(data)
     if action == "reverse":
-        if not animated:
-            raise ValueError("这不是动图")
-        frames.reverse()
-        durations.reverse()
-        return _save_gif(frames, durations, loop), ".gif"
+        if animated:
+            frames.reverse()
+            durations.reverse()
+            return _save_gif(frames, durations, loop), ".gif"
+        action = "flip"
+    if action == "flip":
+        flipped = [frame.transpose(PILImage.Transpose.FLIP_LEFT_RIGHT) for frame in frames]
+        if animated:
+            return _save_gif(flipped, durations, loop), ".gif"
+        return _save_png(flipped[0]), ".png"
     fn = _MIRROR[action]
     processed = [fn(frame) for frame in frames]
     if animated:
