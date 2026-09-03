@@ -21,15 +21,18 @@ USAGE = (
 )
 
 
-def parse_rbdx_args(args: list[str]) -> tuple[str, int | str | None, str]:
+def parse_rbdx_args(
+    args: list[str], *, recognize_kinds: bool = True
+) -> tuple[str, int | str | None, str]:
     kind = "custom"
     level_spec: int | str | None = None
     query_parts: list[str] = []
     for tok in args:
-        parsed_kind = parse_catalog_kind(tok)
-        if parsed_kind:
-            kind = parsed_kind
-            continue
+        if recognize_kinds:
+            parsed_kind = parse_catalog_kind(tok)
+            if parsed_kind:
+                kind = parsed_kind
+                continue
         parsed_level = parse_level_spec(tok)
         if parsed_level is not None:
             if level_spec is None:
@@ -53,10 +56,12 @@ def _no_match_text(label: str, level_spec: int | str | None, query: str) -> str:
 async def handle_rbdx(event: AstrMessageEvent, rbdx: RbdxAPI, settings: Settings):
     parts = event.message_str.split()
     args = parts[1:] if parts else []
-    kind, level_spec, query = parse_rbdx_args(args)
+    gid = group_key(event)
+    recognize_kinds = settings.allow_restricted(gid)
+    kind, level_spec, query = parse_rbdx_args(args, recognize_kinds=recognize_kinds)
     label = catalog_kind_label(kind)
 
-    if not settings.allow_catalog(group_key(event), kind):
+    if not settings.allow_catalog(gid, kind):
         yield event.plain_result("本群未开这类谱")
         return
 

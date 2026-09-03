@@ -328,7 +328,7 @@ async def _song(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
     kinds = ["custom"]
     query_parts = list(rest)
     explicit = False
-    if rest:
+    if rest and runtime.settings.allow_restricted(gid):
         parsed_kind = parse_catalog_kind(rest[0])
         if parsed_kind:
             kinds = [parsed_kind]
