@@ -611,6 +611,9 @@ class RbdxAPI:
         pack_id = song.get("pack_id")
         levels = song.get("levels") or {}
         lines = [name, artist]
+        song_id = song.get("id")
+        if song_id not in (None, ""):
+            lines.append(f"ID {song_id}")
         if chart_author:
             lines.append(f"谱师 {chart_author}")
         pack_bit = pack_name
