@@ -24,15 +24,12 @@ def _crc_mod(text: str) -> int:
 def _compute_chances(user_name: str, question: str, choices: list[str]) -> dict[str, int]:
     daily = _daily_salt()
     crc_name = _crc_mod(f"{user_name}\x1f{daily}")
-    if question == SHENAO_QUESTION:
-        crc_question = _crc_mod(question)
-    else:
-        crc_question = _crc_mod(f"{question}\x1f{daily}")
+    crc_question = _crc_mod(question)
     chance: dict[str, int] = {}
     for choice in choices:
         if choice in chance:
             continue
-        crc_choice = _crc_mod(f"{choice}\x1f{daily}")
+        crc_choice = _crc_mod(choice)
         random.seed(crc_name * crc_question * crc_choice)
         chance[choice] = random.randint(0, 10000)
     return chance
