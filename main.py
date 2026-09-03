@@ -9,7 +9,7 @@ from .lifebuddy.ask import handle_ask
 from .lifebuddy.dib import handle_dib
 from .lifebuddy.fight import handle_fight
 from .lifebuddy.help_cmd import handle_help
-from .lifebuddy.identity import handle_nick, inject_speaker_prompt, observe, stop_event
+from .lifebuddy.identity import handle_nick, inject_speaker_prompt, inject_vision, observe, stop_event
 from .lifebuddy.image_cache import ImageCache
 from .lifebuddy.lists import NumberedCache
 from .lifebuddy.netease import NeteaseCloudMusicAPI
@@ -52,7 +52,7 @@ class LifeBuddy(Star):
     async def help_cmd(self, event: AstrMessageEvent):
         """帮助：/help  /help rbdx"""
         stop_event(event)
-        async for result in handle_help(event):
+        async for result in handle_help(event, self.settings):
             yield result
 
     @filter.command("ask")
@@ -150,6 +150,10 @@ class LifeBuddy(Star):
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req):
         inject_speaker_prompt(event, req, self.store)
+        try:
+            await inject_vision(event, req, self.images)
+        except Exception as exc:
+            logger.warning("inject vision failed: %s", exc)
 
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):

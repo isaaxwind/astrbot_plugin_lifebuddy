@@ -6,23 +6,36 @@ from astrbot.api.event import AstrMessageEvent
 from astrbot.api.message_components import At, Image, Plain
 
 from .aliases import AliasStore
-from .identity import group_key, is_admin, mentioned_qqs, observe, sender_qq
+from .identity import group_key, is_admin, is_private_chat, mentioned_qqs, observe, sender_qq
 from .lists import require_account, short_api_error
-from .rbdx import RbdxAPI, catalog_kind_label, hide_charter, is_wip_kind, parse_catalog_kind
+from .rbdx import RbdxAPI, catalog_kind_label, hide_charter, parse_catalog_kind
 from .settings import Settings
 from .store import BuddyStore
 
-HELP = (
-    "RBDX\n"
-    "/rb bind <四位用户ID>\n"
-    "/rb who [昵称/QQ/@]\n"
-    "/rb recent  （/rb r）\n"
-    "/rb unbind [QQ或用户名]  （仅管理员）\n"
-    "/rb song [custom|arcade|test|test_all] <关键词>\n"
-    "/rb alias list\n"
-    "/rb alias add <别名> <SongID或图片URL>\n"
-    "/rb alias del <别名>  （仅管理员）"
-)
+
+def _rb_help(event: AstrMessageEvent, runtime: RbRuntime) -> str:
+    restricted = runtime.settings.allow_restricted(group_key(event))
+    private = is_private_chat(event)
+    if private:
+        bind = "/rb bind <用户ID或用户名> <密码>"
+        song = "/rb song <关键词>  只搜自制谱"
+    elif restricted:
+        bind = "/rb bind <用户ID或用户名>"
+        song = "/rb song [custom|arcade|test|test_all] <关键词>"
+    else:
+        bind = "/rb bind  群里不能绑，请私聊机器人"
+        song = "/rb song <关键词>  只搜自制谱"
+    return (
+        "RBDX\n"
+        f"{bind}\n"
+        "/rb who [昵称/QQ/@]\n"
+        "/rb recent  （/rb r）\n"
+        "/rb unbind [QQ或用户名]  （仅管理员）\n"
+        f"{song}\n"
+        "/rb alias list\n"
+        "/rb alias add <别名> <SongID或图片URL>\n"
+        "/rb alias del <别名>  （仅管理员）"
+    )
 
 
 class RbRuntime:
@@ -39,7 +52,7 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
     parts = event.message_str.split()
     args = parts[1:] if parts else []
     if not args:
-        yield event.plain_result(HELP)
+        yield event.plain_result(_rb_help(event, runtime))
         return
 
     action = args[0].lower()
@@ -72,7 +85,7 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
             yield result
         return
 
-    yield event.plain_result(HELP)
+    yield event.plain_result(_rb_help(event, runtime))
 
 
 def _who_line(runtime: RbRuntime, qq: str) -> str:
@@ -157,13 +170,17 @@ async def _recent(event: AstrMessageEvent, runtime: RbRuntime):
     text = _recent_text(play)
     song_id = play.get("songId")
     image = ""
+    arcade = False
     if song_id:
         image = await runtime.rbdx.image_file(runtime.rbdx.jacket_url(int(song_id)))
+        arcade = await runtime.rbdx.catalog_has_id("arcade", int(song_id))
     parts: list = []
     if image and not image.startswith("http"):
         parts.append(Image(file=image))
     parts.append(Plain(text))
     yield _recent_chain(event, *parts)
+    if arcade:
+        yield event.plain_result("【被我发现你在偷偷玩年了，hso】")
 
 
 async def _bind(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
@@ -171,25 +188,55 @@ async def _bind(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
     if not qq:
         yield event.plain_result("拿不到你的 QQ")
         return
-    player_id = "".join(rest).strip()
-    if not re.fullmatch(r"\d{4}", player_id):
-        yield event.plain_result("用法：/rb bind <四位用户ID>")
+    private = is_private_chat(event)
+    in_admin_group = runtime.settings.allow_restricted(group_key(event))
+    if not private and not in_admin_group:
+        yield event.plain_result("群里不能绑，请私聊机器人")
+        return
+    if runtime.store.get_bind(qq):
+        yield event.plain_result("你已经绑过了，要换绑找管理员")
+        return
+    if not rest:
+        if private:
+            yield event.plain_result("用法：/rb bind <用户ID或用户名> <密码>")
+        else:
+            yield event.plain_result("用法：/rb bind <用户ID或用户名>")
+        return
+    token = rest[0].strip()
+    password = " ".join(rest[1:]).strip()
+    if private and not password:
+        yield event.plain_result("用法：/rb bind <用户ID或用户名> <密码>")
         return
     try:
-        accounts = await runtime.rbdx.lookup_accounts_by_player_id(player_id)
+        accounts = await runtime.rbdx.lookup_accounts(token)
     except Exception as exc:
         yield event.plain_result(short_api_error(exc))
         return
     if not accounts:
-        yield event.plain_result(f"没有用户ID {player_id} 的账号")
+        yield event.plain_result(f"没有这个号：{token}")
         return
     if len(accounts) > 1:
         yield event.plain_result(
-            f"用户ID {player_id} 对上 {len(accounts)} 个号，没法自动绑：\n" + "\n".join(accounts)
+            "对上多个号，请用用户名绑：\n" + "\n".join(accounts)
         )
         return
     account = accounts[0]
-    runtime.store.set_bind(qq, account)
+    if runtime.store.get_bind_qq(account):
+        yield event.plain_result("这个号已经绑过别的 QQ 了")
+        return
+    if password:
+        try:
+            ok = await runtime.rbdx.verify_password(account, password)
+        except Exception as exc:
+            yield event.plain_result(short_api_error(exc))
+            return
+        if not ok:
+            yield event.plain_result("密码不对")
+            return
+    err = runtime.store.set_bind(qq, account)
+    if err:
+        yield event.plain_result(err)
+        return
     yield event.plain_result(f"已绑 {qq} → {account}")
 
 
@@ -218,24 +265,33 @@ async def _unbind(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
 
 
 async def _song(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
-    kinds = ["custom", "arcade"]
+    gid = group_key(event)
+    kinds = ["custom"]
     query_parts = list(rest)
+    explicit = False
     if rest:
         parsed_kind = parse_catalog_kind(rest[0])
         if parsed_kind:
             kinds = [parsed_kind]
             query_parts = rest[1:]
+            explicit = True
     query = " ".join(query_parts).strip()
     if not query:
-        yield event.plain_result("用法：/rb song [custom|arcade|test|test_all] <关键词>")
+        if runtime.settings.allow_restricted(gid):
+            yield event.plain_result("用法：/rb song [custom|arcade|test|test_all] <关键词>")
+        else:
+            yield event.plain_result("用法：/rb song <关键词>")
         return
-    if any(is_wip_kind(kind) for kind in kinds) and not runtime.settings.allow_wip(
-        group_key(event)
-    ):
-        yield event.plain_result("本群未开内测谱")
-        return
-    if kinds == ["custom", "arcade"] and runtime.settings.allow_wip(group_key(event)):
-        kinds.extend(["test", "brit"])
+    if explicit:
+        kind = kinds[0]
+        if not runtime.settings.allow_catalog(gid, kind):
+            yield event.plain_result("本群未开这类谱")
+            return
+    else:
+        if runtime.settings.allow_catalog(gid, "arcade"):
+            kinds.append("arcade")
+        if runtime.settings.allow_catalog(gid, "test"):
+            kinds.extend(["test", "brit"])
     groups = await runtime.rbdx.search_grouped(query, kinds)
     flat: list[tuple[str, dict]] = []
     for kind, hits in groups.items():
@@ -293,7 +349,7 @@ async def _alias(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
             return
         yield event.plain_result(f"已删别名 {old.alias}")
         return
-    yield event.plain_result(HELP)
+    yield event.plain_result(_rb_help(event, runtime))
 
 
 async def _alias_add(event: AstrMessageEvent, runtime: RbRuntime, args: list[str]):

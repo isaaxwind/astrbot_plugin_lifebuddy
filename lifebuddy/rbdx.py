@@ -542,6 +542,42 @@ class RbdxAPI:
             return []
         return [str(name) for name in accounts if str(name).strip()]
 
+    async def lookup_accounts(self, token: str) -> list[str]:
+        token = (token or "").strip()
+        if not token:
+            return []
+        if re.fullmatch(r"\d{4}", token):
+            return await self.lookup_accounts_by_player_id(token)
+        data = await self._bot_request("GET", "/accounts", params={"accountName": token})
+        accounts = data.get("accounts") if isinstance(data, dict) else None
+        if not isinstance(accounts, list):
+            return []
+        return [str(name) for name in accounts if str(name).strip()]
+
+    async def verify_password(self, account_name: str, password: str) -> bool:
+        try:
+            data = await self._bot_request(
+                "POST",
+                "/verify",
+                json_body={"accountName": account_name, "password": password},
+            )
+        except RuntimeError as exc:
+            text = str(exc)
+            if "401" in text or "403" in text:
+                return False
+            raise
+        if not isinstance(data, dict):
+            return False
+        return bool(data.get("ok")) and bool(data.get("accountName"))
+
+    async def catalog_has_id(self, kind: str, song_id: int) -> bool:
+        try:
+            songs = await self.fetch_catalog(kind)
+        except Exception:
+            return False
+        target = int(song_id)
+        return any(int(song.get("id") or 0) == target for song in songs)
+
     async def list_advice(self, account_name: str | None = None) -> list[dict[str, Any]]:
         params = {}
         if account_name:

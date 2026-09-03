@@ -67,6 +67,7 @@ class Settings:
     netease_fallback: bool = True
     wip_group_ids: list[str] = field(default_factory=list)
     advice_group_ids: list[str] = field(default_factory=list)
+    admin_group_ids: list[str] = field(default_factory=list)
 
     @classmethod
     def from_config(cls, config) -> "Settings":
@@ -79,10 +80,11 @@ class Settings:
             netease_fallback=bool(_get(config, "netease_fallback", True)),
             wip_group_ids=[str(x) for x in wip],
             advice_group_ids=[str(x) for x in _as_str_list(_get(config, "advice_group_ids", []))],
+            admin_group_ids=[str(x) for x in _as_str_list(_get(config, "admin_group_ids", []))],
         )
 
     def allow_wip(self, group_id: str | None) -> bool:
-        if not group_id:
+        if not group_id or group_id == "private":
             return False
         return str(group_id) in self.wip_group_ids
 
@@ -90,3 +92,21 @@ class Settings:
         if not self.advice_group_ids:
             return False
         return str(group_id or "") in self.advice_group_ids
+
+    def allow_restricted(self, group_id: str | None) -> bool:
+        """街机 / 内测 / 群内绑号：仅管理群。未填 admin 时回退 advice+wip。"""
+        if not group_id or group_id == "private":
+            return False
+        gid = str(group_id)
+        if self.admin_group_ids:
+            return gid in self.admin_group_ids
+        return gid in self.advice_group_ids or gid in self.wip_group_ids
+
+    def allow_catalog(self, group_id: str | None, kind: str) -> bool:
+        if kind == "custom":
+            return True
+        if not self.allow_restricted(group_id):
+            return False
+        if kind in ("test", "test_all", "brit"):
+            return self.allow_wip(group_id)
+        return True

@@ -8,7 +8,6 @@ from .rbdx import (
     RbdxAPI,
     catalog_kind_label,
     hide_charter,
-    is_wip_kind,
     jacket_id_for_song,
     parse_catalog_kind,
     parse_level_token,
@@ -16,8 +15,8 @@ from .rbdx import (
 from .settings import Settings
 
 USAGE = (
-    "用法：/rbdx [arcade|test|test_all] [等级] [关键词]\n"
-    "例如 /rbdx 12  /rbdx arcade ryu  /rbdx test 12  /rbdx arcade 10 ryu"
+    "用法：/rbdx [等级] [关键词]\n"
+    "管理群还可 /rbdx arcade|test|test_all [等级] [关键词]"
 )
 
 
@@ -44,8 +43,8 @@ async def handle_rbdx(event: AstrMessageEvent, rbdx: RbdxAPI, settings: Settings
     kind, level, query = parse_rbdx_args(args)
     label = catalog_kind_label(kind)
 
-    if is_wip_kind(kind) and not settings.allow_wip(group_key(event)):
-        yield event.plain_result("本群未开内测谱")
+    if not settings.allow_catalog(group_key(event), kind):
+        yield event.plain_result("本群未开这类谱")
         return
 
     try:

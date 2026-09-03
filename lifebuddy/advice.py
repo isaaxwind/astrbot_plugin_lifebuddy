@@ -59,7 +59,7 @@ async def handle_advice(
         token = args[0].strip()
         rest = args[1:]
         if not rest:
-            text = await _render_comments(rbdx, song_id, title)
+            text = await _render_comments(rbdx, store, song_id, title)
             yield event.plain_result(text)
             return
         item = None
@@ -146,14 +146,60 @@ async def _people(rbdx: RbdxAPI, item: dict | None, song_id: int) -> tuple[str, 
     return str(meta.get("creator") or ""), str(meta.get("chartAuthor") or "")
 
 
-async def _render_comments(rbdx: RbdxAPI, song_id: int, title: str) -> str:
+_BRIT_MARKERS = ("mendes", "英国人", "brit")
+
+
+def _looks_english(text: str) -> bool:
+    letters = [ch for ch in text if ch.isalpha()]
+    if len(letters) < 20:
+        return False
+    latin = sum(1 for ch in letters if ch.isascii())
+    return latin / len(letters) >= 0.8
+
+
+def _is_brit_reviewer(who: str, store: BuddyStore | None = None) -> bool:
+    raw = (who or "").strip()
+    if not raw:
+        return False
+    lower = raw.lower()
+    if any(marker == lower or marker in lower for marker in _BRIT_MARKERS):
+        return True
+    if "英国" in raw:
+        return True
+    if store is None:
+        return False
+    for qq, charter in store.list_charter_aliases():
+        charter_l = charter.lower()
+        if "英国" in charter or any(m in charter_l for m in _BRIT_MARKERS):
+            acc = store.get_bind(qq)
+            if acc and acc.lower() == lower:
+                return True
+    for row in store.list_nicks():
+        nick = (row.nick or "").strip()
+        if not nick:
+            continue
+        nick_l = nick.lower()
+        if "英国" in nick or any(marker in nick_l for marker in _BRIT_MARKERS):
+            acc = store.get_bind(row.qq)
+            if acc and acc.lower() == lower:
+                return True
+    return False
+
+
+async def _render_comments(rbdx: RbdxAPI, store: BuddyStore, song_id: int, title: str) -> str:
     comments = await rbdx.list_advice_comments(song_id)
     if not comments:
         return f"{title} ({song_id}) 还没人评"
     lines = [f"{title} ({song_id})"]
     for row in comments:
-        mark = "过" if int(row.get("isOk") or 0) == 1 else "要改"
         who = row.get("accountName") or "?"
         text = (row.get("comment") or "").strip()
+        if len(text) > 50 and (
+            _is_brit_reviewer(str(who), store) or _looks_english(text)
+        ):
+            mark = "通过" if int(row.get("isOk") or 0) == 1 else "不通过"
+            lines.append(f"- {who} [{mark}] （意见略）")
+            continue
+        mark = "过" if int(row.get("isOk") or 0) == 1 else "要改"
         lines.append(f"- {who} [{mark}] {text}")
     return "\n".join(lines)

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from astrbot.api.event import AstrMessageEvent
 
+from .identity import group_key, is_private_chat
+from .settings import Settings
+
 OVERVIEW = (
     "生活好基友\n"
     "/help <指令>  看某一条的用法\n"
@@ -22,13 +25,29 @@ TOPICS: dict[str, str] = {
     ),
     "rbdx": (
         "/rbdx  随机一首自制谱\n"
+        "/rbdx 12  指定等级"
+    ),
+    "rbdx_admin": (
+        "/rbdx  随机一首自制谱\n"
         "/rbdx 12  指定等级\n"
         "/rbdx arcade  /rbdx test  /rbdx test_all  /rbdx 英国人\n"
         "/rbdx arcade ryu  随机带 ryu 的街机谱，可再加等级\n"
         "test / test_all / 英国人 要在管理页填 wip_group_ids"
     ),
     "rb": (
-        "/rb bind <四位用户ID>  绑号，须唯一\n"
+        "/rb bind  群里不能绑，请私聊机器人\n"
+        "/rb who  看自己绑的号\n"
+        "/rb who <昵称/QQ/@>  查别人绑的号\n"
+        "/rb recent  最近一局（也可 /rb r）\n"
+        "/rb unbind [QQ或用户名]  仅管理员\n"
+        "/rb song <关键词>  只搜自制谱\n"
+        "  只中一首时带夹克；超过 20 首不列\n"
+        "/rb alias list\n"
+        "/rb alias add <别名> <SongID或图片URL>\n"
+        "/rb alias del <别名>  仅管理员"
+    ),
+    "rb_admin": (
+        "/rb bind <用户ID或用户名>  管理群可直接绑，一对一不能自己换\n"
         "/rb who  看自己绑的号\n"
         "/rb who <昵称/QQ/@>  查别人绑的号\n"
         "/rb recent  最近一局（也可 /rb r）\n"
@@ -39,6 +58,12 @@ TOPICS: dict[str, str] = {
         "/rb alias list\n"
         "/rb alias add <别名> <SongID或图片URL>\n"
         "/rb alias del <别名>  仅管理员"
+    ),
+    "rb_private": (
+        "/rb bind <用户ID或用户名> <密码>  一对一，绑过不能自己换\n"
+        "/rb who  看自己绑的号\n"
+        "/rb recent  最近一局（也可 /rb r）\n"
+        "/rb song <关键词>  只搜自制谱"
     ),
     "nick": (
         "/nick 上帝  给自己设称呼\n"
@@ -124,13 +149,20 @@ def _topic_key(args: list[str]) -> str | None:
     return None
 
 
-async def handle_help(event: AstrMessageEvent):
+async def handle_help(event: AstrMessageEvent, settings: Settings | None = None):
     parts = event.message_str.split()
     args = parts[1:] if parts else []
     if not args:
         yield event.plain_result(OVERVIEW)
         return
     key = _topic_key(args)
+    if key == "rb":
+        if is_private_chat(event):
+            key = "rb_private"
+        elif settings and settings.allow_restricted(group_key(event)):
+            key = "rb_admin"
+    elif key == "rbdx" and settings and settings.allow_restricted(group_key(event)):
+        key = "rbdx_admin"
     text = TOPICS.get(key or "")
     if text:
         yield event.plain_result(text)

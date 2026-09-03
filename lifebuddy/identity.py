@@ -45,6 +45,19 @@ def group_key(event: AstrMessageEvent) -> str:
     return gid or "private"
 
 
+def is_private_chat(event: AstrMessageEvent) -> bool:
+    checker = getattr(event, "is_private_chat", None)
+    if callable(checker):
+        try:
+            return bool(checker())
+        except TypeError:
+            pass
+    getter = getattr(event, "get_group_id", None)
+    if callable(getter) and str(getter() or ""):
+        return False
+    return group_key(event) == "private"
+
+
 def is_admin(event: AstrMessageEvent, context=None) -> bool:
     role = getattr(event, "role", None)
     if role and str(role).lower() in ("admin", "owner"):
@@ -114,6 +127,46 @@ def inject_speaker_prompt(event: AstrMessageEvent, req, store: BuddyStore) -> No
         return
     observe(event, store)
     attach_llm_text(req, f"[发言者]\nQQ: {qq}\n称呼: {speaker_label(event, store)}")
+
+
+def _image_suffix(data: bytes) -> str:
+    if data.startswith(b"\x89PNG"):
+        return ".png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return ".gif"
+    if data.startswith(b"RIFF") and b"WEBP" in data[:16]:
+        return ".webp"
+    return ".png"
+
+
+def _is_remote_image_ref(url: str) -> bool:
+    return url.startswith(("http://", "https://"))
+
+
+async def inject_vision(event: AstrMessageEvent, req, cache) -> None:
+    """把消息里的图落到本地再塞进 LLM，避免 DeepSeek 去拉 QQ 图链失败。"""
+    from .symmetry import _write_temp, resolve_image_bytes
+
+    try:
+        data = await resolve_image_bytes(event, cache)
+    except Exception:
+        return
+    if not data:
+        return
+    path = _write_temp(data, _image_suffix(data))
+    urls = getattr(req, "image_urls", None)
+    if isinstance(urls, list):
+        kept = [str(u) for u in urls if str(u) and not _is_remote_image_ref(str(u))]
+        if path not in kept:
+            kept.append(path)
+        req.image_urls = kept
+        return
+    try:
+        req.image_urls = [path]
+    except Exception:
+        pass
 
 
 async def handle_nick(event: AstrMessageEvent, store: BuddyStore, context=None):

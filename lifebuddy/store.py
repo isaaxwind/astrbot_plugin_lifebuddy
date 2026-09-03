@@ -275,17 +275,20 @@ class BuddyStore:
         ).fetchone()
         return str(row["qq"]) if row else None
 
-    def set_bind(self, qq: str, account_name: str) -> None:
+    def set_bind(self, qq: str, account_name: str) -> str | None:
+        existing = self.get_bind(qq)
+        if existing:
+            return "你已经绑过了，要换绑找管理员"
+        owner = self.get_bind_qq(account_name)
+        if owner:
+            return "这个号已经绑过别的 QQ 了"
         now = int(time.time())
-        self._conn.execute(
-            "DELETE FROM binds WHERE qq = ? OR account_name = ? COLLATE NOCASE",
-            (str(qq), account_name),
-        )
         self._conn.execute(
             "INSERT INTO binds(qq, account_name, created_at) VALUES (?,?,?)",
             (str(qq), account_name, now),
         )
         self._conn.commit()
+        return None
 
     def clear_bind(self, *, qq: str | None = None, account_name: str | None = None) -> str | None:
         if qq:

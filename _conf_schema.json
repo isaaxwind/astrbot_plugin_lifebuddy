@@ -39,5 +39,11 @@
     "type": "list",
     "hint": "在管理页填 QQ 群号。不填则 /advice 在任何群都不可用",
     "default": []
+  },
+  "admin_group_ids": {
+    "description": "管理群：可绑号、搜/随机街机。空则回退 advice_group_ids + wip_group_ids",
+    "type": "list",
+    "hint": "外面的群只开放自制谱 /rb song 和 /rbdx。不填则用审核群+内测群当管理群",
+    "default": []
   }
 }

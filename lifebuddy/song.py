@@ -37,6 +37,20 @@ async def handle_natural_song(event: AstrMessageEvent, runtime: SongRuntime):
             yield result
 
 
+def _meaningful_chars(text: str) -> set[str]:
+    chars: set[str] = set()
+    for ch in text or "":
+        if ch.isalnum() or "\u4e00" <= ch <= "\u9fff":
+            chars.add(ch.casefold())
+    return chars
+
+
+def _query_misses_result(query: str, result: str) -> bool:
+    wanted = _meaningful_chars(query)
+    got = _meaningful_chars(result)
+    return bool(wanted) and wanted.isdisjoint(got)
+
+
 async def _image_path(item: object) -> str:
     convert = getattr(item, "convert_to_file_path", None)
     if callable(convert):
@@ -111,6 +125,8 @@ async def _handle_lai_shou(event: AstrMessageEvent, runtime: SongRuntime):
     result.use_t2i(False)
     stop_event(event)
     yield result
+    if _query_misses_result(songname, f"{song_name}{song_artist}{song_album}"):
+        yield event.plain_result("【这哪个字对上了？】")
 
 
 async def _handle_what_song(event: AstrMessageEvent, runtime: SongRuntime):
