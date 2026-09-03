@@ -68,7 +68,7 @@ TOPICS: dict[str, str] = {
     ),
     "是什么歌": (
         "XXX是什么歌  查群梗别名\n"
-        "有自制谱 SongID 的回夹克；remywiki 只回链接，不下图\n"
+        "有自制谱 SongID 的回夹克；remywiki 先试抓图，失败再回链接\n"
         "别名用 /rb alias add 加"
     ),
 }

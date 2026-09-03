@@ -248,30 +248,40 @@ class RbdxAPI:
         }
 
     def _can_fetch_jacket(self, url: str) -> bool:
-        if "remywiki.com" in url.lower():
-            return False
         base = (self.settings.rbdx_image_base or "").rstrip("/")
         if base and url.startswith(base):
             return True
         return "chilundui.com" in url
 
-    async def image_file(self, url: str) -> str:
-        """把夹克拉到本地。地址只用设置里的 CDN 根，不用 downloadall 返回的 url。"""
+    def _is_remywiki(self, url: str) -> bool:
+        return "remywiki.com" in (url or "").lower()
+
+    async def image_file(self, url: str, *, external: bool = False) -> str:
+        """把夹克拉到本地。CDN 夹克走常驻会话；remywiki / 自定义链接只试一次，失败回原 URL。"""
         if not url or not url.startswith(("http://", "https://")):
             return url
-        if not self._can_fetch_jacket(url):
+        remy = self._is_remywiki(url)
+        if not remy and not self._can_fetch_jacket(url) and not external:
             return url
-        timeout = aiohttp.ClientTimeout(total=12, sock_connect=4)
-        headers = self._http_headers(accept="image/png,image/jpeg,image/webp,*/*")
+        isolated = remy or (external and not self._can_fetch_jacket(url))
+        timeout = aiohttp.ClientTimeout(
+            total=8 if isolated else 12,
+            sock_connect=3 if isolated else 4,
+        )
+        if remy:
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/122.0.0.0 Safari/537.36"
+                ),
+                "Accept": "image/png,image/jpeg,image/webp,image/*,*/*;q=0.8",
+                "Referer": "https://remywiki.com/",
+            }
+        else:
+            headers = self._http_headers(accept="image/png,image/jpeg,image/webp,*/*")
         try:
-            session = await self._session_get()
-            async with session.get(
-                url, headers=headers, timeout=timeout, proxy=self._jacket_proxy(url)
-            ) as response:
-                if response.status != 200:
-                    _log_warning("RBDX jacket HTTP %s: %s", response.status, url)
-                    return url
-                data = await response.read()
+            data = await self._read_image_bytes(url, headers, timeout, isolated=isolated)
         except Exception as exc:
             _log_warning("RBDX jacket fail: %s (%s)", exc, url)
             return url
@@ -282,6 +292,34 @@ class RbdxAPI:
         path = Path(tempfile.gettempdir()) / f"lifebuddy_{abs(hash(url)) % 10**10}{suffix}"
         path.write_bytes(data)
         return str(path)
+
+    async def _read_image_bytes(
+        self,
+        url: str,
+        headers: dict[str, str],
+        timeout: aiohttp.ClientTimeout,
+        *,
+        isolated: bool,
+    ) -> bytes:
+        proxy = self._jacket_proxy(url)
+        if isolated:
+            connector = aiohttp.TCPConnector(family=socket.AF_INET, ssl=True)
+            async with aiohttp.ClientSession(connector=connector, trust_env=True) as session:
+                async with session.get(
+                    url, headers=headers, timeout=timeout, proxy=proxy
+                ) as response:
+                    if response.status != 200:
+                        _log_warning("RBDX jacket HTTP %s: %s", response.status, url)
+                        return b""
+                    return await response.read()
+        session = await self._session_get()
+        async with session.get(
+            url, headers=headers, timeout=timeout, proxy=proxy
+        ) as response:
+            if response.status != 200:
+                _log_warning("RBDX jacket HTTP %s: %s", response.status, url)
+                return b""
+            return await response.read()
 
     def _catalog_url_for(self, kind: str) -> str:
         if kind not in CATALOG_TYPE_BY_KIND:

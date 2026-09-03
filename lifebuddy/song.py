@@ -98,9 +98,7 @@ async def _alias_image(runtime: SongRuntime, entry) -> str:
     url = (entry.image or "").strip()
     if not url:
         return ""
-    if entry.song_id is None and "remywiki.com" in url.lower():
-        return ""
-    return await runtime.rbdx.image_file(url)
+    return await runtime.rbdx.image_file(url, external=True)
 
 
 def _alias_result(event: AstrMessageEvent, image: str, entry):
