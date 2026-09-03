@@ -152,6 +152,37 @@ class BuddyStore:
         rows = self._conn.execute("SELECT * FROM nicks ORDER BY nick COLLATE NOCASE").fetchall()
         return [NickRow(r["qq"], r["nick"], r["last_seen_name"], bool(r["manual"])) for r in rows]
 
+    def find_nicks(self, query: str) -> list[NickRow]:
+        needle = (query or "").strip()
+        if not needle:
+            return []
+        exact = self._conn.execute(
+            """
+            SELECT * FROM nicks
+            WHERE qq = ?
+               OR nick = ? COLLATE NOCASE
+               OR last_seen_name = ? COLLATE NOCASE
+            ORDER BY nick COLLATE NOCASE
+            """,
+            (needle, needle, needle),
+        ).fetchall()
+        if exact:
+            return [NickRow(r["qq"], r["nick"], r["last_seen_name"], bool(r["manual"])) for r in exact]
+        if len(needle) < 2:
+            return []
+        like = f"%{needle}%"
+        rows = self._conn.execute(
+            """
+            SELECT * FROM nicks
+            WHERE nick LIKE ? ESCAPE '\\' COLLATE NOCASE
+               OR last_seen_name LIKE ? ESCAPE '\\' COLLATE NOCASE
+            ORDER BY nick COLLATE NOCASE
+            LIMIT 8
+            """,
+            (like, like),
+        ).fetchall()
+        return [NickRow(r["qq"], r["nick"], r["last_seen_name"], bool(r["manual"])) for r in rows]
+
     def get_dib(self, group_id: str, qq: str) -> DibRow | None:
         row = self._conn.execute(
             "SELECT * FROM dibs WHERE group_id = ? AND qq = ?",

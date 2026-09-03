@@ -6,7 +6,7 @@ from astrbot.api.event import AstrMessageEvent
 from astrbot.api.message_components import Image, Plain
 
 from .aliases import AliasStore
-from .identity import group_key, is_admin, observe, sender_qq
+from .identity import group_key, is_admin, mentioned_qqs, observe, sender_qq
 from .lists import short_api_error
 from .rbdx import RbdxAPI, catalog_kind_label, is_wip_kind, parse_catalog_kind
 from .settings import Settings
@@ -15,7 +15,7 @@ from .store import BuddyStore
 HELP = (
     "RBDX\n"
     "/rb bind <四位用户ID>\n"
-    "/rb who\n"
+    "/rb who [昵称/QQ/@]\n"
     "/rb unbind [QQ或用户名]  （仅管理员）\n"
     "/rb song [custom|arcade|test|test_all] <关键词>\n"
     "/rb alias list\n"
@@ -53,12 +53,8 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
             yield result
         return
     if action == "who":
-        qq = sender_qq(event)
-        account = runtime.store.get_bind(qq) if qq else None
-        if not account:
-            yield event.plain_result("还没绑号。/rb bind 四位用户ID")
-            return
-        yield event.plain_result(f"{qq} → {account}")
+        async for result in _who(event, runtime, rest):
+            yield result
         return
 
     if action == "alias":
@@ -72,6 +68,42 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
         return
 
     yield event.plain_result(HELP)
+
+
+def _who_line(runtime: RbRuntime, qq: str) -> str:
+    nick = runtime.store.display_name(qq)
+    account = runtime.store.get_bind(qq)
+    label = f"{nick} ({qq})" if nick != qq else qq
+    if account:
+        return f"{label} → {account}"
+    return f"{label} 还没绑号"
+
+
+async def _who(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
+    targets = mentioned_qqs(event)
+    query = re.sub(r"@\S+", "", " ".join(rest)).strip()
+    if targets:
+        yield event.plain_result("\n".join(_who_line(runtime, qq) for qq in targets))
+        return
+    if not query:
+        qq = sender_qq(event)
+        if not qq:
+            yield event.plain_result("拿不到你的 QQ")
+            return
+        account = runtime.store.get_bind(qq)
+        if not account:
+            yield event.plain_result("还没绑号。/rb bind 四位用户ID")
+            return
+        yield event.plain_result(_who_line(runtime, qq))
+        return
+    if query.isdigit():
+        yield event.plain_result(_who_line(runtime, query))
+        return
+    rows = runtime.store.find_nicks(query)
+    if not rows:
+        yield event.plain_result(f"没找到「{query}」")
+        return
+    yield event.plain_result("\n".join(_who_line(runtime, row.qq) for row in rows))
 
 
 async def _bind(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):

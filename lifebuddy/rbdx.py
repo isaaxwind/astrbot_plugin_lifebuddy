@@ -247,11 +247,21 @@ class RbdxAPI:
             "Accept": accept,
         }
 
+    def _can_fetch_jacket(self, url: str) -> bool:
+        if "remywiki.com" in url.lower():
+            return False
+        base = (self.settings.rbdx_image_base or "").rstrip("/")
+        if base and url.startswith(base):
+            return True
+        return "chilundui.com" in url
+
     async def image_file(self, url: str) -> str:
         """把夹克拉到本地。地址只用设置里的 CDN 根，不用 downloadall 返回的 url。"""
         if not url or not url.startswith(("http://", "https://")):
             return url
-        timeout = aiohttp.ClientTimeout(total=20)
+        if not self._can_fetch_jacket(url):
+            return url
+        timeout = aiohttp.ClientTimeout(total=12, sock_connect=4)
         headers = self._http_headers(accept="image/png,image/jpeg,image/webp,*/*")
         try:
             session = await self._session_get()

@@ -43,6 +43,7 @@ TOPICS: dict[str, str] = {
     "rb": (
         "/rb bind <四位用户ID>  绑号，须唯一\n"
         "/rb who  看自己绑的号\n"
+        "/rb who <昵称/QQ/@>  查别人绑的号\n"
         "/rb unbind [QQ或用户名]  仅管理员\n"
         "/rb song [custom|arcade|test|test_all] <关键词>\n"
         "  默认搜自制+街机；开了内测群再加内测和英国人谱面\n"
@@ -79,7 +80,8 @@ TOPICS: dict[str, str] = {
         "回夹克 + 曲名 / 艺术家 / 等级或专辑链接"
     ),
     "是什么歌": (
-        "XXX是什么歌  查群梗别名，回夹克\n"
+        "XXX是什么歌  查群梗别名\n"
+        "有自制谱 SongID 的回夹克；remywiki 只回链接，不下图\n"
         "别名用 /rb alias add 加"
     ),
 }

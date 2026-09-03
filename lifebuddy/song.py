@@ -82,22 +82,34 @@ async def _handle_what_song(event: AstrMessageEvent, runtime: SongRuntime):
 
     songname = msg_str.split("是什么歌")[0]
     matches = runtime.aliases.find(songname)
-    try:
-        if not matches:
-            stop_event(event)
-            yield event.plain_result(f"未找到别名为“{songname}”的歌")
-            return
+    if not matches:
         stop_event(event)
-        for entry in matches:
-            image = await runtime.rbdx.image_file(entry.image)
-            result = event.make_result()
-            result.chain = [
-                Plain("您要找的是不是："),
-                Image(file=image),
-            ]
-            result.use_t2i(False)
-            yield result
-    except Exception as e:
-        stop_event(event)
-        yield event.plain_result("出错了，傻逼！")
-        yield event.plain_result(f"{e}")
+        yield event.plain_result(f"未找到别名为“{songname}”的歌")
+        return
+    stop_event(event)
+    for entry in matches:
+        try:
+            yield _alias_result(event, await _alias_image(runtime, entry), entry)
+        except Exception:
+            yield event.plain_result(f"您要找的是不是：{entry.alias}")
+
+
+async def _alias_image(runtime: SongRuntime, entry) -> str:
+    url = (entry.image or "").strip()
+    if not url:
+        return ""
+    if entry.song_id is None and "remywiki.com" in url.lower():
+        return ""
+    return await runtime.rbdx.image_file(url)
+
+
+def _alias_result(event: AstrMessageEvent, image: str, entry):
+    text = f"您要找的是不是：{entry.alias}"
+    if image and not image.startswith("http"):
+        result = event.make_result()
+        result.chain = [Plain(text), Image(file=image)]
+        result.use_t2i(False)
+        return result
+    if (entry.image or "").startswith("http"):
+        text = f"{text}\n{entry.image}"
+    return event.plain_result(text)

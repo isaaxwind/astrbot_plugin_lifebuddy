@@ -11,6 +11,22 @@ def stop_event(event: AstrMessageEvent) -> None:
         stopper()
 
 
+def mentioned_qqs(event: AstrMessageEvent) -> list[str]:
+    obj = getattr(event, "message_obj", None)
+    chain = getattr(obj, "message", None) or []
+    found: list[str] = []
+    for item in chain:
+        if type(item).__name__ != "At":
+            continue
+        qq = getattr(item, "qq", None) or getattr(item, "target", None)
+        text = str(qq or "").strip()
+        if not text or text.lower() == "all" or not text.lstrip("-").isdigit():
+            continue
+        if text not in found:
+            found.append(text)
+    return found
+
+
 def sender_qq(event: AstrMessageEvent) -> str:
     getter = getattr(event, "get_sender_id", None)
     if callable(getter):
