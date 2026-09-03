@@ -10,6 +10,7 @@ from .lifebuddy.dib import handle_dib
 from .lifebuddy.fight import handle_fight
 from .lifebuddy.help_cmd import handle_help
 from .lifebuddy.identity import handle_nick, inject_speaker_prompt, observe, stop_event
+from .lifebuddy.image_cache import ImageCache
 from .lifebuddy.lists import NumberedCache
 from .lifebuddy.netease import NeteaseCloudMusicAPI
 from .lifebuddy.rb_cmd import RbRuntime, handle_rb
@@ -18,6 +19,7 @@ from .lifebuddy.rbdx_cmd import handle_rbdx
 from .lifebuddy.settings import Settings
 from .lifebuddy.song import SongRuntime, handle_natural_song
 from .lifebuddy.store import BuddyStore
+from .lifebuddy.symmetry import handle_symmetry, ingest_event_image
 
 
 @register("lifebuddy", "Isaax", "生活好基友", "1.0.0")
@@ -34,6 +36,7 @@ class LifeBuddy(Star):
         self.fight_cache = NumberedCache()
         self.song_runtime = SongRuntime(self.aliases, self.netease, self.rbdx, self.settings)
         self.rb_runtime = RbRuntime(self.aliases, self.rbdx, self.settings, self.store, self.context)
+        self.images = ImageCache()
         proxy = self.settings.rbdx_http_proxy or "-"
         if self.settings.rbdx_http_proxy.lower().startswith("socks"):
             logger.warning("rbdx_http_proxy 是 SOCKS，aiohttp 用不了，请改 Clash 的 HTTP/Mixed 端口")
@@ -109,14 +112,53 @@ class LifeBuddy(Star):
         async for result in handle_fight(event, self.store, self.rbdx, self.fight_cache):
             yield result
 
+    @filter.command("左对称", alias={"对称左", "对称"})
+    async def sym_left(self, event: AstrMessageEvent):
+        """左对称：左半边原样，右半边镜像"""
+        stop_event(event)
+        async for result in handle_symmetry(event, self.images, "left"):
+            yield result
+
+    @filter.command("右对称", alias={"对称右"})
+    async def sym_right(self, event: AstrMessageEvent):
+        """右对称"""
+        stop_event(event)
+        async for result in handle_symmetry(event, self.images, "right"):
+            yield result
+
+    @filter.command("上对称", alias={"对称上"})
+    async def sym_top(self, event: AstrMessageEvent):
+        """上对称"""
+        stop_event(event)
+        async for result in handle_symmetry(event, self.images, "top"):
+            yield result
+
+    @filter.command("下对称", alias={"对称下"})
+    async def sym_bottom(self, event: AstrMessageEvent):
+        """下对称"""
+        stop_event(event)
+        async for result in handle_symmetry(event, self.images, "bottom"):
+            yield result
+
+    @filter.command("倒放")
+    async def gif_reverse(self, event: AstrMessageEvent):
+        """动图倒放"""
+        stop_event(event)
+        async for result in handle_symmetry(event, self.images, "reverse"):
+            yield result
+
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req):
         inject_speaker_prompt(event, req, self.store)
 
     @event_message_type(EventMessageType.ALL)
     async def on_all_message(self, event: AstrMessageEvent):
-        """来首 / 是什么歌"""
+        """来首 / 是什么歌；顺便存图给对称用"""
         observe(event, self.store)
+        try:
+            await ingest_event_image(event, self.images)
+        except Exception as exc:
+            logger.warning("ingest image failed: %s", exc)
         try:
             async for result in handle_natural_song(event, self.song_runtime):
                 yield result
