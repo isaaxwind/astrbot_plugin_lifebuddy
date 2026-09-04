@@ -236,10 +236,10 @@ async def _recent(event: AstrMessageEvent, runtime: RbRuntime):
     parts: list = []
     if image and not image.startswith("http"):
         parts.append(Image(file=image))
+    if arcade:
+        text = f"{text}\n\n【被我发现你在偷偷玩年了，hso】"
     parts.append(Plain(text))
     yield _recent_chain(event, *parts)
-    if arcade:
-        yield event.plain_result("【被我发现你在偷偷玩年了，hso】")
 
 
 async def _bind(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):

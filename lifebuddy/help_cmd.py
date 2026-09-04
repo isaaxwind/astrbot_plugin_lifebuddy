@@ -9,7 +9,7 @@ OVERVIEW = (
     "生活好基友\n"
     "/help <指令>  看某一条的用法\n"
     "\n"
-    "/ask  /rbdx  /rb  /nick  /dib  /advice  /fight\n"
+    "/ask  /rbdx  /rb  /nick  /dib  /advice  /fight  /复读  /金句\n"
     "来首XXX  XXX是什么歌"
 )
 
@@ -121,6 +121,18 @@ TOPICS: dict[str, str] = {
         "有自制谱 SongID 的回夹克；remywiki 先试抓图，失败再回链接\n"
         "别名用 /rb alias add 加"
     ),
+    "复读": (
+        "/复读  本周排行\n"
+        "/复读 周|月|总\n"
+        "/复读 链  最近复读链\n"
+        "/复读 链 <编号>  看内容和参与者\n"
+        "同一个人连发不算；短于 3 人的链不记"
+    ),
+    "金句": (
+        "/金句  昨日金句\n"
+        "/金句 7  近7天\n"
+        "每天挑最短的 5 条；0 点后本群第一条消息会报昨日金句"
+    ),
 }
 
 ALIASES = {
@@ -146,6 +158,10 @@ ALIASES = {
     "来首": "来首",
     "是什么歌": "是什么歌",
     "laishou": "来首",
+    "复读": "复读",
+    "fudu": "复读",
+    "金句": "金句",
+    "jiju": "金句",
 }
 
 PUBLIC_TOPIC_KEYS = frozenset({"help", "rbdx", "rb"})

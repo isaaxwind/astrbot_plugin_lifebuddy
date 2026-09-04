@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 
 
@@ -85,6 +87,59 @@ class BuddyStore:
                 charter TEXT NOT NULL,
                 PRIMARY KEY (qq, charter)
             );
+            CREATE TABLE IF NOT EXISTS fudu_state (
+                group_id TEXT PRIMARY KEY,
+                text TEXT NOT NULL,
+                people TEXT NOT NULL,
+                bot_echoed INTEGER NOT NULL DEFAULT 0,
+                started_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS fudu_chains (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id TEXT NOT NULL,
+                text TEXT NOT NULL,
+                length INTEGER NOT NULL,
+                started_at INTEGER NOT NULL,
+                ended_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS fudu_chain_people (
+                chain_id INTEGER NOT NULL,
+                qq TEXT NOT NULL,
+                PRIMARY KEY (chain_id, qq)
+            );
+            CREATE TABLE IF NOT EXISTS fudu_records (
+                group_id TEXT PRIMARY KEY,
+                best_length INTEGER NOT NULL,
+                best_chain_id INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS jiju_candidates (
+                group_id TEXT NOT NULL,
+                day TEXT NOT NULL,
+                text TEXT NOT NULL,
+                length INTEGER NOT NULL,
+                PRIMARY KEY (group_id, day, text)
+            );
+            CREATE TABLE IF NOT EXISTS jiju_blocked (
+                group_id TEXT NOT NULL,
+                day TEXT NOT NULL,
+                text TEXT NOT NULL,
+                PRIMARY KEY (group_id, day, text)
+            );
+            CREATE TABLE IF NOT EXISTS jiju_daily (
+                group_id TEXT NOT NULL,
+                day TEXT NOT NULL,
+                rank INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                PRIMARY KEY (group_id, day, rank)
+            );
+            CREATE TABLE IF NOT EXISTS jiju_announce (
+                group_id TEXT PRIMARY KEY,
+                last_day TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_fudu_chains_group_ended
+                ON fudu_chains(group_id, ended_at);
+            CREATE INDEX IF NOT EXISTS idx_jiju_daily_group_day
+                ON jiju_daily(group_id, day);
             """
         )
         self._conn.commit()
@@ -370,6 +425,275 @@ class BuddyStore:
             if charter not in names:
                 names.append(charter)
         return names
+
+    def fudu_state(self, group_id: str) -> dict | None:
+        row = self._conn.execute(
+            "SELECT * FROM fudu_state WHERE group_id = ?", (group_id,)
+        ).fetchone()
+        if not row:
+            return None
+        people = _json_list(row["people"])
+        return {
+            "text": str(row["text"] or ""),
+            "people": people,
+            "bot_echoed": bool(row["bot_echoed"]),
+            "started_at": int(row["started_at"]),
+        }
+
+    def set_fudu_state(
+        self,
+        group_id: str,
+        text: str,
+        people: list[str],
+        *,
+        bot_echoed: bool,
+        started_at: int,
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO fudu_state(group_id, text, people, bot_echoed, started_at)
+            VALUES (?,?,?,?,?)
+            ON CONFLICT(group_id) DO UPDATE SET
+                text = excluded.text,
+                people = excluded.people,
+                bot_echoed = excluded.bot_echoed,
+                started_at = excluded.started_at
+            """,
+            (group_id, text, json.dumps(people, ensure_ascii=False), 1 if bot_echoed else 0, started_at),
+        )
+        self._conn.commit()
+
+    def clear_fudu_state(self, group_id: str) -> None:
+        self._conn.execute("DELETE FROM fudu_state WHERE group_id = ?", (group_id,))
+        self._conn.commit()
+
+    def save_fudu_chain(
+        self,
+        group_id: str,
+        text: str,
+        people: list[str],
+        started_at: int,
+        ended_at: int,
+    ) -> tuple[int, int, bool]:
+        length = len(people)
+        self._conn.execute(
+            """
+            INSERT INTO fudu_chains(group_id, text, length, started_at, ended_at)
+            VALUES (?,?,?,?,?)
+            """,
+            (group_id, text, length, started_at, ended_at),
+        )
+        chain_id = int(self._conn.execute("SELECT last_insert_rowid()").fetchone()[0])
+        self._conn.executemany(
+            "INSERT OR IGNORE INTO fudu_chain_people(chain_id, qq) VALUES (?,?)",
+            [(chain_id, qq) for qq in people],
+        )
+        rec = self._conn.execute(
+            "SELECT best_length FROM fudu_records WHERE group_id = ?",
+            (group_id,),
+        ).fetchone()
+        broken = False
+        if rec is None:
+            self._conn.execute(
+                "INSERT INTO fudu_records(group_id, best_length, best_chain_id) VALUES (?,?,?)",
+                (group_id, length, chain_id),
+            )
+        elif length > int(rec["best_length"]):
+            self._conn.execute(
+                "UPDATE fudu_records SET best_length = ?, best_chain_id = ? WHERE group_id = ?",
+                (length, chain_id, group_id),
+            )
+            broken = True
+        self._conn.commit()
+        best = int(
+            (
+                self._conn.execute(
+                    "SELECT best_length FROM fudu_records WHERE group_id = ?",
+                    (group_id,),
+                ).fetchone()
+                or {"best_length": length}
+            )["best_length"]
+        )
+        return chain_id, best, broken
+
+    def fudu_board(self, group_id: str, since: int, limit: int = 20) -> list[tuple[str, int]]:
+        rows = self._conn.execute(
+            """
+            SELECT p.qq AS qq, COUNT(*) AS n
+            FROM fudu_chain_people p
+            JOIN fudu_chains c ON c.id = p.chain_id
+            WHERE c.group_id = ? AND c.ended_at >= ?
+            GROUP BY p.qq
+            ORDER BY n DESC, p.qq
+            LIMIT ?
+            """,
+            (group_id, since, limit),
+        ).fetchall()
+        return [(str(r["qq"]), int(r["n"])) for r in rows]
+
+    def list_fudu_chains(self, group_id: str, limit: int = 15) -> list[dict]:
+        rows = self._conn.execute(
+            """
+            SELECT id, text, length, started_at, ended_at
+            FROM fudu_chains
+            WHERE group_id = ?
+            ORDER BY ended_at DESC
+            LIMIT ?
+            """,
+            (group_id, limit),
+        ).fetchall()
+        return [
+            {
+                "id": int(r["id"]),
+                "text": str(r["text"] or ""),
+                "length": int(r["length"]),
+                "started_at": int(r["started_at"]),
+                "ended_at": int(r["ended_at"]),
+            }
+            for r in rows
+        ]
+
+    def get_fudu_chain(self, group_id: str, chain_id: int) -> dict | None:
+        row = self._conn.execute(
+            """
+            SELECT id, text, length, started_at, ended_at
+            FROM fudu_chains
+            WHERE group_id = ? AND id = ?
+            """,
+            (group_id, chain_id),
+        ).fetchone()
+        if not row:
+            return None
+        people = self._conn.execute(
+            "SELECT qq FROM fudu_chain_people WHERE chain_id = ? ORDER BY qq",
+            (chain_id,),
+        ).fetchall()
+        return {
+            "id": int(row["id"]),
+            "text": str(row["text"] or ""),
+            "length": int(row["length"]),
+            "started_at": int(row["started_at"]),
+            "ended_at": int(row["ended_at"]),
+            "people": [str(r["qq"]) for r in people],
+        }
+
+    def add_jiju_candidate(self, group_id: str, day: str, text: str) -> None:
+        if self.is_jiju_blocked(group_id, day, text):
+            return
+        if self.is_yesterday_jiju(group_id, day, text):
+            return
+        self._conn.execute(
+            """
+            INSERT OR IGNORE INTO jiju_candidates(group_id, day, text, length)
+            VALUES (?,?,?,?)
+            """,
+            (group_id, day, text, len(text)),
+        )
+        self._conn.commit()
+
+    def is_jiju_blocked(self, group_id: str, day: str, text: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM jiju_blocked WHERE group_id = ? AND day = ? AND text = ?",
+            (group_id, day, text),
+        ).fetchone()
+        return row is not None
+
+    def block_jiju_text(self, group_id: str, day: str, text: str) -> None:
+        self._conn.execute(
+            "INSERT OR IGNORE INTO jiju_blocked(group_id, day, text) VALUES (?,?,?)",
+            (group_id, day, text),
+        )
+        self._conn.execute(
+            "DELETE FROM jiju_candidates WHERE group_id = ? AND day = ? AND text = ?",
+            (group_id, day, text),
+        )
+        self._conn.commit()
+
+    def is_yesterday_jiju(self, group_id: str, today: str, text: str) -> bool:
+        try:
+            prev = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
+        except ValueError:
+            return False
+        row = self._conn.execute(
+            "SELECT 1 FROM jiju_daily WHERE group_id = ? AND day = ? AND text = ?",
+            (group_id, prev, text),
+        ).fetchone()
+        return row is not None
+
+    def jiju_announced_day(self, group_id: str) -> str | None:
+        row = self._conn.execute(
+            "SELECT last_day FROM jiju_announce WHERE group_id = ?", (group_id,)
+        ).fetchone()
+        return str(row["last_day"]) if row else None
+
+    def mark_jiju_announced(self, group_id: str, day: str) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO jiju_announce(group_id, last_day) VALUES (?,?)
+            ON CONFLICT(group_id) DO UPDATE SET last_day = excluded.last_day
+            """,
+            (group_id, day),
+        )
+        self._conn.commit()
+
+    def finalize_jiju(self, group_id: str, day: str) -> list[str]:
+        existing = self.list_jiju(group_id, day)
+        if existing:
+            return existing
+        rows = self._conn.execute(
+            """
+            SELECT c.text AS text
+            FROM jiju_candidates c
+            WHERE c.group_id = ? AND c.day = ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM jiju_blocked b
+                  WHERE b.group_id = c.group_id AND b.day = c.day AND b.text = c.text
+              )
+            ORDER BY c.length, c.text
+            LIMIT 5
+            """,
+            (group_id, day),
+        ).fetchall()
+        texts = [str(r["text"]) for r in rows]
+        for i, text in enumerate(texts, 1):
+            self._conn.execute(
+                "INSERT OR IGNORE INTO jiju_daily(group_id, day, rank, text) VALUES (?,?,?,?)",
+                (group_id, day, i, text),
+            )
+        self._conn.commit()
+        return texts
+
+    def list_jiju(self, group_id: str, day: str) -> list[str]:
+        rows = self._conn.execute(
+            """
+            SELECT text FROM jiju_daily
+            WHERE group_id = ? AND day = ?
+            ORDER BY rank
+            """,
+            (group_id, day),
+        ).fetchall()
+        return [str(r["text"]) for r in rows]
+
+    def recent_jiju(self, group_id: str, since_day: str, until_day: str) -> list[str]:
+        rows = self._conn.execute(
+            """
+            SELECT DISTINCT text FROM jiju_daily
+            WHERE group_id = ? AND day >= ? AND day <= ?
+            ORDER BY day DESC, rank
+            """,
+            (group_id, since_day, until_day),
+        ).fetchall()
+        return [str(r["text"]) for r in rows]
+
+
+def _json_list(raw) -> list[str]:
+    try:
+        data = json.loads(raw or "[]")
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [str(x) for x in data if str(x)]
 
 
 def _dib(row: sqlite3.Row) -> DibRow:

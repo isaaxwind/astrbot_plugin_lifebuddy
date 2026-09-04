@@ -15,6 +15,18 @@ USAGE = (
 )
 
 
+def _fight_count(item: dict) -> int:
+    votes = item.get("votes") or []
+    names: set[str] = set()
+    for vote in votes:
+        if not isinstance(vote, dict):
+            continue
+        name = str(vote.get("accountName") or vote.get("AccountName") or "").strip()
+        if name:
+            names.add(name.casefold())
+    return len(names) if names else len(votes)
+
+
 async def handle_fight(
     event: AstrMessageEvent,
     store: BuddyStore,
@@ -113,5 +125,8 @@ async def _render_list(rbdx: RbdxAPI, account: str, cache: NumberedCache, gid: s
         mine_text = str(mine) if mine is not None else "-"
         vr = item.get("voteRange") or []
         span = f"{min(vr)}-{max(vr)}" if vr else "?"
-        lines.append(f"{i}. {title}  {label}{level}  均分{avg}  你:{mine_text}  可投{span}")
+        fighters = _fight_count(item)
+        lines.append(
+            f"{i}. {title}  {label}{level}  均分{avg}  {fighters}人打架  你:{mine_text}  可投{span}"
+        )
     return "\n".join(lines)

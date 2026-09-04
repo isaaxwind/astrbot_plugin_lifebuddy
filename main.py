@@ -8,12 +8,14 @@ from .lifebuddy.aliases import AliasStore
 from .lifebuddy.ask import handle_ask
 from .lifebuddy.dib import handle_dib
 from .lifebuddy.fight import handle_fight
+from .lifebuddy.fudu import handle_fudu, handle_jiju, process_group_chat
 from .lifebuddy.help_cmd import handle_help
 from .lifebuddy.identity import (
     deny_public_extras,
     handle_nick,
     inject_speaker_prompt,
     inject_vision,
+    is_public_group,
     observe,
     stop_event,
 )
@@ -132,6 +134,24 @@ class LifeBuddy(Star):
         async for result in handle_fight(event, self.store, self.rbdx, self.fight_cache):
             yield result
 
+    @filter.command("复读", alias={"fudu"})
+    async def fudu_cmd(self, event: AstrMessageEvent):
+        """复读排行 / 复读链"""
+        stop_event(event)
+        if self._public_blocked(event):
+            return
+        async for result in handle_fudu(event, self.store):
+            yield result
+
+    @filter.command("金句", alias={"jiju"})
+    async def jiju_cmd(self, event: AstrMessageEvent):
+        """昨日金句 / 近7天"""
+        stop_event(event)
+        if self._public_blocked(event):
+            return
+        async for result in handle_jiju(event, self.store):
+            yield result
+
     @filter.command("左对称", alias={"对称左", "对称"})
     async def sym_left(self, event: AstrMessageEvent):
         """左对称：[比例0-100，默认50]"""
@@ -209,6 +229,12 @@ class LifeBuddy(Star):
                 yield result
         except Exception as exc:
             logger.warning("on_all_message failed: %s", exc)
+        if not is_public_group(event, self.settings):
+            try:
+                async for result in process_group_chat(event, self.store):
+                    yield result
+            except Exception as exc:
+                logger.warning("group chat extras failed: %s", exc)
 
     async def terminate(self):
         await self.netease.close()

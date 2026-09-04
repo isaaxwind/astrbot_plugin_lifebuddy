@@ -34,6 +34,20 @@ def sender_qq(event: AstrMessageEvent) -> str:
     return ""
 
 
+def self_id(event: AstrMessageEvent) -> str:
+    getter = getattr(event, "get_self_id", None)
+    if callable(getter):
+        return str(getter() or "")
+    obj = getattr(event, "message_obj", None)
+    return str(getattr(obj, "self_id", "") or "")
+
+
+def is_self_message(event: AstrMessageEvent) -> bool:
+    mine = self_id(event)
+    qq = sender_qq(event)
+    return bool(mine) and mine == qq
+
+
 def group_key(event: AstrMessageEvent) -> str:
     getter = getattr(event, "get_group_id", None)
     if callable(getter):

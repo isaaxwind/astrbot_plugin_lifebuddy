@@ -51,6 +51,19 @@ def _query_misses_result(query: str, result: str) -> bool:
     return bool(wanted) and wanted.isdisjoint(got)
 
 
+def _append_plain(result, extra: str) -> None:
+    chain = list(getattr(result, "chain", None) or [])
+    for i, part in enumerate(chain):
+        if type(part).__name__ != "Plain":
+            continue
+        old = str(getattr(part, "text", "") or "")
+        chain[i] = Plain(f"{old}\n\n{extra}" if old else extra)
+        result.chain = chain
+        return
+    chain.append(Plain(extra))
+    result.chain = chain
+
+
 async def _image_path(item: object) -> str:
     convert = getattr(item, "convert_to_file_path", None)
     if callable(convert):
@@ -123,10 +136,10 @@ async def _handle_lai_shou(event: AstrMessageEvent, runtime: SongRuntime):
         Plain(f"{song_name}\n{song_artist}\nfrom 《{song_album}》\n{song_link}"),
     ]
     result.use_t2i(False)
+    if _query_misses_result(songname, f"{song_name}{song_artist}{song_album}"):
+        _append_plain(result, "【这哪个字对上了？】")
     stop_event(event)
     yield result
-    if _query_misses_result(songname, f"{song_name}{song_artist}{song_album}"):
-        yield event.plain_result("【这哪个字对上了？】")
 
 
 async def _handle_what_song(event: AstrMessageEvent, runtime: SongRuntime):

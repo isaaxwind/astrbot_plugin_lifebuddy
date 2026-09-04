@@ -60,6 +60,7 @@ async def handle_ask(event: AstrMessageEvent, store: BuddyStore | None = None):
         return
 
     chance = _compute_chances(user_name, question, choices)
-    yield event.plain_result(_format_result(user_name, question, chance))
+    text = _format_result(user_name, question, chance)
     if _is_shenao(chance):
-        yield event.plain_result("我操，深奥上了")
+        text = f"{text}\n\n我操，深奥上了"
+    yield event.plain_result(text)
