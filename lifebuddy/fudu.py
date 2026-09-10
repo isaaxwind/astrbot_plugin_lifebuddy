@@ -8,13 +8,14 @@ from zoneinfo import ZoneInfo
 
 from astrbot.api.event import AstrMessageEvent
 
-from .identity import group_key, is_private_chat, is_self_message, sender_qq, stop_event
+from .identity import group_key, is_private_chat, is_self_message, self_id, sender_qq, stop_event
 from .store import BuddyStore
 
 TZ = ZoneInfo("Asia/Shanghai")
 FUDU_ECHO_MIN = 4
 FUDU_ECHO_CHANCES = (0.20, 0.60, 1.00)
 FUDU_STAT_MIN = 3
+JIJU_REPEAT_BLOCK = 3
 JIJU_ECHO_CHANCE = 0.05
 JIJU_CHAT_CHANCE = 0.0001
 MAX_FUDU_LEN = 200
@@ -252,7 +253,7 @@ async def process_group_chat(event: AstrMessageEvent, store: BuddyStore):
 
     state = store.fudu_state(gid)
     repeating = bool(
-        state and text == state.get("text") and len(state.get("people") or []) >= 2
+        state and text == state.get("text") and len(state.get("people") or []) >= JIJU_REPEAT_BLOCK
     )
     if is_jiju_text(text) and not repeating:
         store.add_jiju_candidate(gid, today_str(), text)
@@ -286,6 +287,9 @@ async def _handle_fudu_message(
     text: str,
 ):
     now = int(time.time())
+    bot = self_id(event)
+    if bot and qq == bot:
+        return
     state = store.fudu_state(gid)
     ended: dict | None = None
 
@@ -305,7 +309,7 @@ async def _handle_fudu_message(
                 bot_echoed=state["bot_echoed"],
                 started_at=state["started_at"],
             )
-            if len(people) >= 2:
+            if len(people) >= JIJU_REPEAT_BLOCK:
                 store.block_jiju_text(gid, today_str(), text)
             async for result in _maybe_echo(event, store, gid, text, people, state):
                 yield result
@@ -324,7 +328,8 @@ async def _handle_fudu_message(
 
 
 async def _close_chain(event: AstrMessageEvent, store: BuddyStore, gid: str, state: dict, now: int):
-    people = list(state.get("people") or [])
+    bot = self_id(event)
+    people = [qq for qq in (state.get("people") or []) if qq and qq != bot]
     text = str(state.get("text") or "")
     if len(people) < FUDU_STAT_MIN:
         return

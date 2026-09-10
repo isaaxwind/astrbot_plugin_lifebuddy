@@ -43,9 +43,22 @@ def self_id(event: AstrMessageEvent) -> str:
 
 
 def is_self_message(event: AstrMessageEvent) -> bool:
-    mine = self_id(event)
     qq = sender_qq(event)
-    return bool(mine) and mine == qq
+    mine = self_id(event)
+    if mine and qq and mine == qq:
+        return True
+    obj = getattr(event, "message_obj", None)
+    raw = getattr(obj, "raw_message", None) if obj is not None else None
+    if isinstance(raw, dict):
+        self_raw = str(raw.get("self_id") or mine or "")
+        user_raw = str(raw.get("user_id") or "")
+        if self_raw and user_raw and self_raw == user_raw:
+            return True
+        sender = raw.get("sender") if isinstance(raw.get("sender"), dict) else {}
+        sender_id = str(sender.get("user_id") or sender.get("id") or "")
+        if self_raw and sender_id and self_raw == sender_id:
+            return True
+    return False
 
 
 def group_key(event: AstrMessageEvent) -> str:

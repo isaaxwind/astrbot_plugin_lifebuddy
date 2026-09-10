@@ -678,7 +678,7 @@ class BuddyStore:
                   WHERE b.group_id = c.group_id AND b.day = c.day AND b.text = c.text
               )
             ORDER BY c.length DESC, c.text
-            LIMIT 1
+            LIMIT 5
             """,
             (group_id, day),
         ).fetchall()
