@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import io
+import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -16,13 +18,32 @@ from PIL import ImageSequence
 from .identity import sender_qq
 from .image_cache import ImageCache
 
-MAX_INPUT_BYTES = 8 * 1024 * 1024
-MAX_PIXELS = 20_000_000
-MAX_GIF_FRAMES = 80
+try:
+    from astrbot.api.message_components import Video as VideoComp
+except Exception:
+    VideoComp = None  # type: ignore
+
 HTTP_UA = "Mozilla/5.0 (compatible; lifebuddy/1.0)"
+_VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".3gp", ".m4v"}
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 def _is_image(item: object) -> bool:
     return type(item).__name__ == "Image" or isinstance(item, Image)
+
+
+def _is_video(item: object) -> bool:
+    name = type(item).__name__
+    if name == "Video" or (VideoComp is not None and isinstance(item, VideoComp)):
+        return True
+    if name == "File":
+        raw = str(getattr(item, "name", None) or getattr(item, "file", None) or "")
+        return Path(raw.split("?")[0]).suffix.lower() in _VIDEO_EXT
+    return False
+
+
+def _is_media(item: object) -> bool:
+    return _is_image(item) or _is_video(item)
 
 
 def _is_reply(item: object) -> bool:
@@ -79,57 +100,127 @@ def reply_message_id(event: AstrMessageEvent) -> str:
     return ""
 
 
-def _looks_like_image(data: bytes) -> bool:
+def sniff_media(data: bytes) -> str:
     if not data or len(data) < 8:
-        return False
-    return data.startswith(
-        (b"\x89PNG", b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"RIFF")
-    )
+        return ""
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "gif"
+    if data.startswith((b"\x89PNG", b"\xff\xd8\xff")):
+        return "image"
+    if data.startswith(b"RIFF") and b"WEBP" in data[:16]:
+        return "image"
+    if data.startswith(b"RIFF") and b"AVI" in data[:16]:
+        return "video"
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        return "video"
+    if data.startswith(b"\x1a\x45\xdf\xa3"):
+        return "video"
+    return ""
 
 
-async def _read_component_bytes(image: object) -> bytes | None:
-    convert = getattr(image, "convert_to_file_path", None)
+def sniff_file(path: str | Path) -> str:
+    try:
+        with Path(path).open("rb") as fh:
+            kind = sniff_media(fh.read(32))
+        if kind:
+            return kind
+    except OSError:
+        return ""
+    suffix = Path(path).suffix.lower()
+    if suffix in _VIDEO_EXT:
+        return "video"
+    if suffix == ".gif":
+        return "gif"
+    if suffix in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}:
+        return "image"
+    return ""
+
+
+def _looks_like_image(data: bytes) -> bool:
+    return sniff_media(data) in ("image", "gif")
+
+
+def _looks_like_media(data: bytes) -> bool:
+    return sniff_media(data) in ("image", "gif", "video")
+
+
+def _ffmpeg_bin() -> str:
+    return shutil.which("ffmpeg") or ""
+
+
+async def _read_component_path(item: object) -> str | None:
+    convert = getattr(item, "convert_to_file_path", None)
     if callable(convert):
         try:
             path = await convert()
-            if path:
-                data = Path(path).read_bytes()
-                if _looks_like_image(data):
-                    return data
+            if path and Path(path).is_file():
+                return str(Path(path))
         except Exception:
             pass
     for attr in ("url", "file", "path"):
-        value = getattr(image, attr, None)
+        value = getattr(item, attr, None)
         if isinstance(value, str) and value.startswith(("http://", "https://")):
-            data = await _download(value)
-            if data:
-                return data
+            path = await _download_file(value)
+            if path:
+                return path
         if isinstance(value, str) and value and not value.startswith(("http", "base64://")):
             path = Path(value.removeprefix("file:///"))
             if path.is_file():
-                data = path.read_bytes()
-                if _looks_like_image(data):
-                    return data
+                return str(path)
     return None
 
 
-async def _download(url: str) -> bytes | None:
+async def _read_component_bytes(image: object) -> bytes | None:
+    path = await _read_component_path(image)
+    if not path:
+        return None
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return None
+    if _looks_like_image(data):
+        return data
+    return None
+
+
+async def _download_file(url: str) -> str | None:
     if not url.startswith(("http://", "https://")):
         return None
-    timeout = aiohttp.ClientTimeout(total=15)
+    dest = Path(tempfile.gettempdir()) / f"lifebuddy_dl_{uuid4().hex}"
+    timeout = aiohttp.ClientTimeout(total=180, sock_connect=20)
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 url,
-                headers={"User-Agent": HTTP_UA, "Accept": "image/*"},
+                headers={"User-Agent": HTTP_UA, "Accept": "*/*"},
                 timeout=timeout,
             ) as resp:
                 if resp.status != 200:
                     return None
-                data = await resp.read()
+                with dest.open("wb") as fh:
+                    async for chunk in resp.content.iter_chunked(256 * 1024):
+                        fh.write(chunk)
     except Exception:
+        dest.unlink(missing_ok=True)
         return None
-    if len(data) > MAX_INPUT_BYTES or not _looks_like_image(data):
+    if not dest.is_file() or dest.stat().st_size < 8:
+        dest.unlink(missing_ok=True)
+        return None
+    if not sniff_file(dest):
+        dest.unlink(missing_ok=True)
+        return None
+    return str(dest)
+
+
+async def _download(url: str) -> bytes | None:
+    path = await _download_file(url)
+    if not path:
+        return None
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return None
+    if not _looks_like_image(data):
         return None
     return data
 
@@ -152,14 +243,13 @@ async def _call_get_msg(event: AstrMessageEvent, reply_id: str) -> Any:
     for call in callers:
         if not callable(call):
             continue
-        for message_id in (reply_id,):
+        try:
+            return await call("get_msg", message_id=reply_id)
+        except Exception:
             try:
-                return await call("get_msg", message_id=message_id)
+                return await call("get_msg", message_id=int(reply_id))
             except Exception:
-                try:
-                    return await call("get_msg", message_id=int(message_id))
-                except Exception:
-                    continue
+                continue
     return None
 
 
@@ -178,11 +268,16 @@ def _urls_from_get_msg(payload: Any) -> list[str]:
     for seg in segments:
         if not isinstance(seg, dict):
             continue
-        if str(seg.get("type") or "") not in ("image", "img", "mface"):
+        kind = str(seg.get("type") or "")
+        if kind not in ("image", "img", "mface", "video", "file"):
             continue
         body = seg.get("data") or {}
         if not isinstance(body, dict):
             continue
+        if kind == "file":
+            name = str(body.get("name") or body.get("file") or "")
+            if Path(name.split("?")[0]).suffix.lower() not in _VIDEO_EXT | {".gif", ".png", ".jpg", ".jpeg", ".webp"}:
+                continue
         for key in ("url", "file"):
             value = body.get(key)
             if isinstance(value, str) and value.startswith(("http://", "https://")):
@@ -195,44 +290,57 @@ async def ingest_event_image(event: AstrMessageEvent, cache: ImageCache) -> None
     if not mid:
         return
     for item in message_chain(event):
-        if not _is_image(item):
+        if not _is_media(item):
             continue
-        data = await _read_component_bytes(item)
-        if data:
-            cache.put(mid, data)
+        path = await _read_component_path(item)
+        if path:
+            cache.put_file(mid, path)
         return
 
 
-async def resolve_image_bytes(event: AstrMessageEvent, cache: ImageCache) -> bytes | None:
+async def resolve_media_path(event: AstrMessageEvent, cache: ImageCache) -> str | None:
     for item in message_chain(event):
-        if _is_image(item):
-            data = await _read_component_bytes(item)
-            if data:
-                return data
+        if _is_media(item):
+            path = await _read_component_path(item)
+            if path:
+                return path
         if _is_reply(item):
             nested = getattr(item, "chain", None) or []
             for sub in nested:
-                if _is_image(sub):
-                    data = await _read_component_bytes(sub)
-                    if data:
-                        return data
+                if _is_media(sub):
+                    path = await _read_component_path(sub)
+                    if path:
+                        return path
     reply_id = reply_message_id(event)
     if reply_id:
-        cached = cache.get(reply_id)
+        cached = cache.get_path(reply_id)
         if cached:
-            return cached
+            return str(cached)
         payload = await _call_get_msg(event, reply_id)
         for url in _urls_from_get_msg(payload):
-            data = await _download(url)
-            if data:
-                cache.put(reply_id, data)
-                return data
-    if reply_id:
+            path = await _download_file(url)
+            if path:
+                cache.put_file(reply_id, path)
+                return path
         return None
     url = _avatar_url(event)
     if url:
-        return await _download(url)
+        return await _download_file(url)
     return None
+
+
+async def resolve_image_bytes(event: AstrMessageEvent, cache: ImageCache) -> bytes | None:
+    path = await resolve_media_path(event, cache)
+    if not path:
+        return None
+    kind = sniff_file(path)
+    if kind == "video":
+        return None
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return None
+    return data if _looks_like_image(data) else None
 
 
 def _keep_size(total: int, ratio: int) -> int:
@@ -302,13 +410,7 @@ _MIRROR = {
 
 def _load_frames(data: bytes) -> tuple[list[PILImage.Image], list[int], bool, int]:
     src = PILImage.open(io.BytesIO(data))
-    w, h = src.size
-    if w * h > MAX_PIXELS:
-        raise ValueError("图太大了")
     animated = bool(getattr(src, "is_animated", False)) and (src.format or "").upper() == "GIF"
-    n_frames = int(getattr(src, "n_frames", 1) or 1)
-    if animated and n_frames > MAX_GIF_FRAMES:
-        raise ValueError("动图帧数太多")
     frames: list[PILImage.Image] = []
     durations: list[int] = []
     if animated:
@@ -346,8 +448,6 @@ def _save_png(img: PILImage.Image) -> bytes:
 
 
 def process_image(data: bytes, action: str, ratio: int = 50) -> tuple[bytes, str]:
-    if len(data) > MAX_INPUT_BYTES:
-        raise ValueError("图太大了")
     ratio = max(0, min(100, int(ratio)))
     frames, durations, animated, loop = _load_frames(data)
     if action == "reverse":
@@ -368,34 +468,147 @@ def process_image(data: bytes, action: str, ratio: int = 50) -> tuple[bytes, str
     return _save_png(processed[0]), ".png"
 
 
+def _keep_even(dim: str, ratio: int) -> str:
+    r = max(0, min(100, int(ratio))) / 100.0
+    return f"max(2\\,trunc({dim}*{r}/2)*2)"
+
+
+def _ffmpeg_vf(action: str, ratio: int) -> str:
+    if action == "reverse":
+        return "reverse"
+    if action == "flip":
+        return "hflip"
+    kw = _keep_even("iw", ratio)
+    kh = _keep_even("ih", ratio)
+    if action == "left":
+        return f"crop={kw}:ih:0:0,split[a][b];[b]hflip[c];[a][c]hstack"
+    if action == "right":
+        return f"crop={kw}:ih:iw-ow:0,split[a][b];[b]hflip[c];[c][a]hstack"
+    if action == "top":
+        return f"crop=iw:{kh}:0:0,split[a][b];[b]vflip[c];[a][c]vstack"
+    if action == "bottom":
+        return f"crop=iw:{kh}:0:ih-oh,split[a][b];[b]vflip[c];[c][a]vstack"
+    raise ValueError("unknown action")
+
+
+def _run_ffmpeg(cmd: list[str]) -> None:
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        timeout=300,
+        creationflags=_CREATE_NO_WINDOW,
+    )
+    if result.returncode != 0:
+        err = (result.stderr or b"").decode("utf-8", "ignore")[-400:]
+        raise ValueError(err.strip() or "ffmpeg 失败")
+
+
+def process_ffmpeg(src: str, action: str, ratio: int, kind: str) -> tuple[str, str]:
+    ffmpeg = _ffmpeg_bin()
+    if not ffmpeg:
+        raise ValueError("没装 ffmpeg，视频和大动图做不了")
+    ratio = max(0, min(100, int(ratio)))
+    vf = _ffmpeg_vf(action, ratio)
+    suffix = ".gif" if kind == "gif" else ".mp4"
+    out = str(Path(tempfile.gettempdir()) / f"lifebuddy_sym_{uuid4().hex}{suffix}")
+    if kind == "gif":
+        _run_ffmpeg([ffmpeg, "-y", "-i", src, "-vf", vf, "-an", out])
+        return out, suffix
+    cmd = [ffmpeg, "-y", "-i", src, "-vf", vf]
+    if action == "reverse":
+        cmd += ["-af", "areverse"]
+    cmd += [
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        out,
+    ]
+    try:
+        _run_ffmpeg(cmd)
+    except ValueError:
+        if action != "reverse":
+            raise
+        Path(out).unlink(missing_ok=True)
+        _run_ffmpeg(
+            [
+                ffmpeg,
+                "-y",
+                "-i",
+                src,
+                "-vf",
+                vf,
+                "-an",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                out,
+            ]
+        )
+    return out, suffix
+
+
 def _write_temp(data: bytes, suffix: str) -> str:
     path = Path(tempfile.gettempdir()) / f"lifebuddy_sym_{uuid4().hex}{suffix}"
     path.write_bytes(data)
     return str(path)
 
 
+def _send_path(event: AstrMessageEvent, path: str, suffix: str):
+    result = event.make_result()
+    if suffix == ".mp4" and VideoComp is not None:
+        factory = getattr(VideoComp, "fromFileSystem", None)
+        if callable(factory):
+            result.chain = [factory(path=path)]
+        else:
+            result.chain = [VideoComp(file=path)]
+    else:
+        result.chain = [Image(file=path)]
+    result.use_t2i(False)
+    return result
+
+
 async def handle_symmetry(event: AstrMessageEvent, cache: ImageCache, action: str):
     ratio = parse_symmetry_ratio(event)
     try:
-        raw = await resolve_image_bytes(event, cache)
+        src = await resolve_media_path(event, cache)
     except Exception:
-        raw = None
-    if not raw:
+        src = None
+    if not src:
         if reply_message_id(event):
             yield event.plain_result("这张图我没存到")
             return
         yield event.plain_result("头像拿不到")
         return
+    kind = sniff_file(src) or "image"
     try:
-        out, suffix = await asyncio.to_thread(process_image, raw, action, ratio)
+        if kind == "video" and not _ffmpeg_bin():
+            yield event.plain_result("没装 ffmpeg，视频做不了")
+            return
+        if kind in ("video", "gif") and _ffmpeg_bin():
+            out, suffix = await asyncio.to_thread(process_ffmpeg, src, action, ratio, kind)
+            yield _send_path(event, out, suffix)
+            return
+        data = Path(src).read_bytes()
+        out, suffix = await asyncio.to_thread(process_image, data, action, ratio)
     except ValueError as exc:
-        yield event.plain_result(str(exc))
+        text = str(exc)
+        if "没装 ffmpeg" in text:
+            yield event.plain_result(text)
+        else:
+            yield event.plain_result("视频没做成" if kind == "video" else "图没做成")
         return
     except Exception:
-        yield event.plain_result("图没做成")
+        yield event.plain_result("图没做成" if kind != "video" else "视频没做成")
         return
     path = _write_temp(out, suffix)
-    result = event.make_result()
-    result.chain = [Image(file=path)]
-    result.use_t2i(False)
-    yield result
+    yield _send_path(event, path, suffix)

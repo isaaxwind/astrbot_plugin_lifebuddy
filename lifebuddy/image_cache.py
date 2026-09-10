@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import time
 from pathlib import Path
 
@@ -28,11 +29,27 @@ class ImageCache:
         self.prune()
         return path
 
-    def get(self, message_id: str) -> bytes | None:
+    def put_file(self, message_id: str, src: str | Path) -> Path | None:
+        if not message_id:
+            return None
+        src_path = Path(src)
+        if not src_path.is_file():
+            return None
+        dest = self.path_for(message_id)
+        if src_path.resolve() != dest.resolve():
+            shutil.copyfile(src_path, dest)
+        self.prune()
+        return dest
+
+    def get_path(self, message_id: str) -> Path | None:
         if not message_id:
             return None
         path = self.path_for(message_id)
-        if not path.is_file():
+        return path if path.is_file() else None
+
+    def get(self, message_id: str) -> bytes | None:
+        path = self.get_path(message_id)
+        if path is None:
             return None
         return path.read_bytes()
 
