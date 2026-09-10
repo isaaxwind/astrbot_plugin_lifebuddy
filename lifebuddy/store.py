@@ -136,12 +136,25 @@ class BuddyStore:
                 group_id TEXT PRIMARY KEY,
                 last_day TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS cities (
+                qq TEXT PRIMARY KEY,
+                city TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_fudu_chains_group_ended
                 ON fudu_chains(group_id, ended_at);
             CREATE INDEX IF NOT EXISTS idx_jiju_daily_group_day
                 ON jiju_daily(group_id, day);
             """
         )
+        cols = {
+            str(r[1])
+            for r in self._conn.execute("PRAGMA table_info(fudu_chain_people)").fetchall()
+        }
+        if "seq" not in cols:
+            self._conn.execute(
+                "ALTER TABLE fudu_chain_people ADD COLUMN seq INTEGER NOT NULL DEFAULT 0"
+            )
         self._conn.commit()
 
     def close(self) -> None:
@@ -485,8 +498,8 @@ class BuddyStore:
         )
         chain_id = int(self._conn.execute("SELECT last_insert_rowid()").fetchone()[0])
         self._conn.executemany(
-            "INSERT OR IGNORE INTO fudu_chain_people(chain_id, qq) VALUES (?,?)",
-            [(chain_id, qq) for qq in people],
+            "INSERT OR IGNORE INTO fudu_chain_people(chain_id, qq, seq) VALUES (?,?,?)",
+            [(chain_id, qq, i) for i, qq in enumerate(people)],
         )
         rec = self._conn.execute(
             "SELECT best_length FROM fudu_records WHERE group_id = ?",
@@ -531,6 +544,21 @@ class BuddyStore:
         ).fetchall()
         return [(str(r["qq"]), int(r["n"])) for r in rows]
 
+    def longest_fudu_chain(self, group_id: str, since: int) -> dict | None:
+        row = self._conn.execute(
+            """
+            SELECT id
+            FROM fudu_chains
+            WHERE group_id = ? AND ended_at >= ?
+            ORDER BY length DESC, ended_at DESC, id DESC
+            LIMIT 1
+            """,
+            (group_id, since),
+        ).fetchone()
+        if not row:
+            return None
+        return self.get_fudu_chain(group_id, int(row["id"]))
+
     def list_fudu_chains(self, group_id: str, limit: int = 15) -> list[dict]:
         rows = self._conn.execute(
             """
@@ -565,7 +593,7 @@ class BuddyStore:
         if not row:
             return None
         people = self._conn.execute(
-            "SELECT qq FROM fudu_chain_people WHERE chain_id = ? ORDER BY qq",
+            "SELECT qq FROM fudu_chain_people WHERE chain_id = ? ORDER BY seq, qq",
             (chain_id,),
         ).fetchall()
         return {
@@ -649,8 +677,8 @@ class BuddyStore:
                   SELECT 1 FROM jiju_blocked b
                   WHERE b.group_id = c.group_id AND b.day = c.day AND b.text = c.text
               )
-            ORDER BY c.length, c.text
-            LIMIT 5
+            ORDER BY c.length DESC, c.text
+            LIMIT 1
             """,
             (group_id, day),
         ).fetchall()
@@ -684,6 +712,38 @@ class BuddyStore:
             (group_id, since_day, until_day),
         ).fetchall()
         return [str(r["text"]) for r in rows]
+
+    def get_city(self, qq: str) -> str:
+        row = self._conn.execute(
+            "SELECT city FROM cities WHERE qq = ?", (str(qq or "").strip(),)
+        ).fetchone()
+        return str(row["city"] or "").strip() if row else ""
+
+    def set_city(self, qq: str, city: str) -> str:
+        qq = str(qq or "").strip()
+        city = (city or "").strip()
+        if not qq or not city:
+            return ""
+        now = int(time.time())
+        self._conn.execute(
+            """
+            INSERT INTO cities(qq, city, updated_at) VALUES (?,?,?)
+            ON CONFLICT(qq) DO UPDATE SET
+                city = excluded.city,
+                updated_at = excluded.updated_at
+            """,
+            (qq, city, now),
+        )
+        self._conn.commit()
+        return city
+
+    def clear_city(self, qq: str) -> bool:
+        qq = str(qq or "").strip()
+        if not qq:
+            return False
+        cur = self._conn.execute("DELETE FROM cities WHERE qq = ?", (qq,))
+        self._conn.commit()
+        return cur.rowcount > 0
 
 
 def _json_list(raw) -> list[str]:

@@ -9,7 +9,7 @@ OVERVIEW = (
     "生活好基友\n"
     "/help <指令>  看某一条的用法\n"
     "\n"
-    "/ask  /rbdx  /rb  /nick  /dib  /advice  /fight  /复读  /金句\n"
+    "/ask  /rbdx  /rb  /nick  /dib  /advice  /fight  /复读  /金句  /city  /weather\n"
     "来首XXX  XXX是什么歌"
 )
 
@@ -122,7 +122,7 @@ TOPICS: dict[str, str] = {
         "别名用 /rb alias add 加"
     ),
     "复读": (
-        "/复读  本周排行\n"
+        "/复读  本周最长复读链\n"
         "/复读 周|月|总\n"
         "/复读 链  最近复读链\n"
         "/复读 链 <编号>  看内容和参与者\n"
@@ -131,7 +131,17 @@ TOPICS: dict[str, str] = {
     "金句": (
         "/金句  昨日金句\n"
         "/金句 7  近7天\n"
-        "每天挑最短的 5 条；0 点后本群第一条消息会报昨日金句"
+        "每天挑最长的一句；指令、链接、特殊字符、复读都不算\n"
+        "0 点后本群第一条消息会报昨日金句"
+    ),
+    "city": (
+        "/city <城市>  记下你所在的城市\n"
+        "/city  看当前设置\n"
+        "/city 清  清掉"
+    ),
+    "weather": (
+        "/weather  查自己城市的天气（先 /city）\n"
+        "/weather <城市>  查指定城市"
     ),
 }
 
@@ -162,6 +172,10 @@ ALIASES = {
     "fudu": "复读",
     "金句": "金句",
     "jiju": "金句",
+    "city": "city",
+    "城市": "city",
+    "weather": "weather",
+    "天气": "weather",
 }
 
 PUBLIC_TOPIC_KEYS = frozenset({"help", "rbdx", "rb"})

@@ -29,6 +29,7 @@ from .lifebuddy.settings import Settings
 from .lifebuddy.song import SongRuntime, handle_natural_song
 from .lifebuddy.store import BuddyStore
 from .lifebuddy.symmetry import handle_symmetry, ingest_event_image
+from .lifebuddy.weather import WeatherClient, handle_city, handle_weather
 
 
 @register("lifebuddy", "Isaax", "生活好基友", "1.0.0")
@@ -46,6 +47,7 @@ class LifeBuddy(Star):
         self.song_runtime = SongRuntime(self.aliases, self.netease, self.rbdx, self.settings)
         self.rb_runtime = RbRuntime(self.aliases, self.rbdx, self.settings, self.store, self.context)
         self.images = ImageCache()
+        self.weather = WeatherClient(self.settings.rbdx_http_proxy)
         proxy = self.settings.rbdx_http_proxy or "-"
         if self.settings.rbdx_http_proxy.lower().startswith("socks"):
             logger.warning("rbdx_http_proxy 是 SOCKS，aiohttp 用不了，请改 Clash 的 HTTP/Mixed 端口")
@@ -152,6 +154,20 @@ class LifeBuddy(Star):
         async for result in handle_jiju(event, self.store):
             yield result
 
+    @filter.command("city", alias={"城市"})
+    async def city_cmd(self, event: AstrMessageEvent):
+        """所在城市：/city 上海"""
+        stop_event(event)
+        async for result in handle_city(event, self.store):
+            yield result
+
+    @filter.command("weather", alias={"天气"})
+    async def weather_cmd(self, event: AstrMessageEvent):
+        """天气：/weather  或 /weather 上海"""
+        stop_event(event)
+        async for result in handle_weather(event, self.store, self.weather):
+            yield result
+
     @filter.command("左对称", alias={"对称左", "对称"})
     async def sym_left(self, event: AstrMessageEvent):
         """左对称：[比例0-100，默认50]"""
@@ -239,4 +255,5 @@ class LifeBuddy(Star):
     async def terminate(self):
         await self.netease.close()
         await self.rbdx.close()
+        await self.weather.close()
         self.store.close()

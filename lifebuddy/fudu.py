@@ -15,16 +15,21 @@ TZ = ZoneInfo("Asia/Shanghai")
 FUDU_ECHO_MIN = 4
 FUDU_ECHO_CHANCES = (0.20, 0.60, 1.00)
 FUDU_STAT_MIN = 3
-JIJU_REPEAT_BLOCK = 5
 JIJU_ECHO_CHANCE = 0.05
 JIJU_CHAT_CHANCE = 0.0001
 MAX_FUDU_LEN = 200
 
 _SPECIAL = re.compile(r"[^\w\s\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]")
 _COMMAND = re.compile(r"^[/／!！.]")
+_URL = re.compile(
+    r"(https?://|www\.|"
+    r"[a-z0-9][a-z0-9.-]*\.(com|net|org|cn|cc|io|tv|me|xyz|top|app|co|info|gov|edu)"
+    r"(/|\b))",
+    re.I,
+)
 
 USAGE_FUDU = (
-    "/复读  本周排行\n"
+    "/复读  本周最长复读链\n"
     "/复读 周|月|总\n"
     "/复读 链  最近复读链\n"
     "/复读 链 <编号>  看内容和参与者"
@@ -64,6 +69,14 @@ def _clip(text: str, limit: int = 40) -> str:
     return raw[: limit - 1] + "…"
 
 
+_CMD_HEADS = {
+    "help", "帮助", "ask", "rb", "rbdx", "nick", "dib", "advice", "fight",
+    "复读", "fudu", "金句", "jiju", "city", "weather", "城市", "天气",
+    "左对称", "右对称", "上对称", "下对称", "倒放",
+    "对称", "对称左", "对称右", "对称上", "对称下",
+}
+
+
 def is_command_text(text: str) -> bool:
     raw = (text or "").lstrip()
     if _COMMAND.match(raw):
@@ -72,12 +85,17 @@ def is_command_text(text: str) -> bool:
         return True
     if raw.endswith("是什么歌") and len(raw) >= 4:
         return True
+    head = raw.split()[0] if raw else ""
+    if head in _CMD_HEADS:
+        return True
     return False
 
 
 def is_jiju_text(text: str) -> bool:
     raw = (text or "").strip()
     if not raw or is_command_text(raw):
+        return False
+    if _URL.search(raw):
         return False
     if _SPECIAL.search(raw):
         return False
@@ -115,14 +133,11 @@ async def handle_fudu(event: AstrMessageEvent, store: BuddyStore):
         yield event.plain_result(USAGE_FUDU)
         return
     title = {"week": "本周", "month": "本月", "all": "总"}[kind]
-    rows = store.fudu_board(gid, period_start(kind))
-    if not rows:
+    chain = store.longest_fudu_chain(gid, period_start(kind))
+    if not chain:
         yield event.plain_result(f"{title}还没有够格的复读链")
         return
-    lines = [f"复读{title}榜（链数，每人每条链只算一次）"]
-    for i, (qq, n) in enumerate(rows, 1):
-        lines.append(f"{i}. {store.display_name(qq)}  {n}")
-    yield event.plain_result("\n".join(lines))
+    yield event.plain_result(_chain_text(store, chain, f"{title}最长复读"))
 
 
 async def _fudu_chains(event: AstrMessageEvent, store: BuddyStore, gid: str, rest: list[str]):
@@ -134,12 +149,7 @@ async def _fudu_chains(event: AstrMessageEvent, store: BuddyStore, gid: str, res
         if not chain:
             yield event.plain_result("没有这条复读链")
             return
-        lines = [
-            f"复读 {chain['length']} 人",
-            chain["text"],
-            _people_line(store, chain["people"]),
-        ]
-        yield event.plain_result("\n".join(lines))
+        yield event.plain_result(_chain_text(store, chain, f"复读 {chain['length']} 人"))
         return
     items = store.list_fudu_chains(gid)
     if not items:
@@ -185,10 +195,24 @@ async def handle_jiju(event: AstrMessageEvent, store: BuddyStore):
 
 
 def _jiju_announce_text(day: str, texts: list[str]) -> str:
+    if not texts:
+        return f"{day} 没有金句"
+    if len(texts) == 1:
+        return f"{day} 金句\n{texts[0]}"
     lines = [f"{day} 金句"]
     for i, text in enumerate(texts, 1):
         lines.append(f"{i}. {text}")
     return "\n".join(lines)
+
+
+def _chain_text(store: BuddyStore, chain: dict, title: str) -> str:
+    return "\n".join(
+        [
+            f"{title}：{chain['length']} 人",
+            f"「{chain['text']}」",
+            _people_line(store, chain["people"]),
+        ]
+    )
 
 
 def _pick_recent_jiju(store: BuddyStore, gid: str) -> str:
@@ -226,10 +250,13 @@ async def process_group_chat(event: AstrMessageEvent, store: BuddyStore):
     if echoed:
         return
 
-    if is_jiju_text(text):
+    state = store.fudu_state(gid)
+    repeating = bool(
+        state and text == state.get("text") and len(state.get("people") or []) >= 2
+    )
+    if is_jiju_text(text) and not repeating:
         store.add_jiju_candidate(gid, today_str(), text)
 
-    state = store.fudu_state(gid)
     if state and len(state.get("people") or []) > 1:
         return
     if random.random() < JIJU_CHAT_CHANCE:
@@ -278,7 +305,7 @@ async def _handle_fudu_message(
                 bot_echoed=state["bot_echoed"],
                 started_at=state["started_at"],
             )
-            if len(people) > JIJU_REPEAT_BLOCK:
+            if len(people) >= 2:
                 store.block_jiju_text(gid, today_str(), text)
             async for result in _maybe_echo(event, store, gid, text, people, state):
                 yield result
