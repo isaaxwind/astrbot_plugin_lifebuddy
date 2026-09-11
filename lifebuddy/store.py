@@ -141,6 +141,10 @@ class BuddyStore:
                 city TEXT NOT NULL,
                 updated_at INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS sleeps (
+                qq TEXT PRIMARY KEY,
+                slept_at INTEGER NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_fudu_chains_group_ended
                 ON fudu_chains(group_id, ended_at);
             CREATE INDEX IF NOT EXISTS idx_jiju_daily_group_day
@@ -744,6 +748,43 @@ class BuddyStore:
         cur = self._conn.execute("DELETE FROM cities WHERE qq = ?", (qq,))
         self._conn.commit()
         return cur.rowcount > 0
+
+    def set_sleep(self, qq: str, slept_at: int | None = None) -> int:
+        qq = str(qq or "").strip()
+        when = int(slept_at if slept_at is not None else time.time())
+        if not qq:
+            return when
+        self._conn.execute(
+            """
+            INSERT INTO sleeps(qq, slept_at) VALUES (?,?)
+            ON CONFLICT(qq) DO UPDATE SET slept_at = excluded.slept_at
+            """,
+            (qq, when),
+        )
+        self._conn.commit()
+        return when
+
+    def peek_sleep(self, qq: str) -> int | None:
+        qq = str(qq or "").strip()
+        if not qq:
+            return None
+        row = self._conn.execute(
+            "SELECT slept_at FROM sleeps WHERE qq = ?", (qq,)
+        ).fetchone()
+        return int(row["slept_at"]) if row else None
+
+    def take_sleep(self, qq: str) -> int | None:
+        qq = str(qq or "").strip()
+        if not qq:
+            return None
+        row = self._conn.execute(
+            "SELECT slept_at FROM sleeps WHERE qq = ?", (qq,)
+        ).fetchone()
+        if not row:
+            return None
+        self._conn.execute("DELETE FROM sleeps WHERE qq = ?", (qq,))
+        self._conn.commit()
+        return int(row["slept_at"])
 
 
 def _json_list(raw) -> list[str]:

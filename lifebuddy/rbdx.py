@@ -70,8 +70,8 @@ def is_wip_kind(kind: str) -> bool:
 
 
 def song_matches_query(song: dict[str, Any], query: str, *, include_id: bool = True) -> bool:
-    needle = (query or "").strip().lower()
-    if not needle:
+    raw = (query or "").strip()
+    if not raw:
         return True
     ext = special_ext_id(song)
     parts = [str(song.get("name", "")), str(song.get("artist", ""))]
@@ -80,8 +80,35 @@ def song_matches_query(song: dict[str, Any], query: str, *, include_id: bool = T
         if ext:
             parts.append(str(ext))
     parts.append(song_charter(song))
-    blob = " ".join(parts).lower()
-    return needle in blob
+    blob = " ".join(parts)
+    pattern = compile_search_pattern(raw)
+    if pattern is not None:
+        return any(pattern.search(part) for part in parts if part) or bool(pattern.search(blob))
+    needle = raw.lower()
+    return needle in blob.lower()
+
+
+def compile_search_pattern(query: str) -> re.Pattern[str] | None:
+    raw = (query or "").strip()
+    if len(raw) >= 2 and raw.startswith("/") and raw.endswith("/"):
+        try:
+            return re.compile(raw[1:-1], re.I)
+        except re.error:
+            return None
+    if "*" not in raw and "?" not in raw:
+        return None
+    chunks: list[str] = []
+    for ch in raw:
+        if ch == "*":
+            chunks.append(".*")
+        elif ch == "?":
+            chunks.append(".")
+        else:
+            chunks.append(re.escape(ch))
+    try:
+        return re.compile("".join(chunks), re.I)
+    except re.error:
+        return None
 
 
 def song_charter(song: dict[str, Any]) -> str:
@@ -568,7 +595,7 @@ class RbdxAPI:
     async def search_published(
         self, query: str, limit: int | None = None, kind: str = "custom"
     ) -> list[dict[str, Any]]:
-        needle = (query or "").strip().lower()
+        needle = (query or "").strip()
         if not needle:
             return []
         songs = await self.fetch_catalog(kind)

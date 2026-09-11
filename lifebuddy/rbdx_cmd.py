@@ -17,6 +17,7 @@ from .settings import Settings
 USAGE = (
     "用法：/rbdx [等级] [关键词]\n"
     "等级可写 12 或 14.2；会同时按难度和曲名匹配\n"
+    "关键词可用 * ? 通配，或 /正则/\n"
     "管理群还可 /rbdx arcade|test|test_all [等级] [关键词]"
 )
 

@@ -337,9 +337,9 @@ async def _song(event: AstrMessageEvent, runtime: RbRuntime, rest: list[str]):
     query = " ".join(query_parts).strip()
     if not query:
         if runtime.settings.allow_restricted(gid):
-            yield event.plain_result("用法：/rb song [custom|arcade|test|test_all] <关键词>")
+            yield event.plain_result("用法：/rb song [custom|arcade|test|test_all] <关键词>（可用 * ? 或 /正则/）")
         else:
-            yield event.plain_result("用法：/rb song <关键词>")
+            yield event.plain_result("用法：/rb song <关键词>（可用 * ? 或 /正则/）")
         return
     if explicit:
         kind = kinds[0]

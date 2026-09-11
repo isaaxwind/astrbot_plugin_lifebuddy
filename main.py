@@ -16,6 +16,7 @@ from .lifebuddy.identity import (
     inject_speaker_prompt,
     inject_vision,
     is_public_group,
+    is_self_message,
     observe,
     stop_event,
 )
@@ -26,6 +27,7 @@ from .lifebuddy.rb_cmd import RbRuntime, handle_rb
 from .lifebuddy.rbdx import RbdxAPI
 from .lifebuddy.rbdx_cmd import handle_rbdx
 from .lifebuddy.settings import Settings
+from .lifebuddy.sleep import handle_sleep, handle_sleep_wake
 from .lifebuddy.song import SongRuntime, handle_natural_song
 from .lifebuddy.store import BuddyStore
 from .lifebuddy.symmetry import handle_symmetry, ingest_event_image
@@ -168,6 +170,15 @@ class LifeBuddy(Star):
         async for result in handle_weather(event, self.store, self.weather):
             yield result
 
+    @filter.command("sleep", alias={"睡觉"})
+    async def sleep_cmd(self, event: AstrMessageEvent):
+        """睡觉：/sleep"""
+        stop_event(event)
+        if self._public_blocked(event):
+            return
+        async for result in handle_sleep(event, self.store):
+            yield result
+
     @filter.command("左对称", alias={"对称左", "对称"})
     async def sym_left(self, event: AstrMessageEvent):
         """左对称：[比例0-100，默认50]"""
@@ -228,6 +239,12 @@ class LifeBuddy(Star):
     async def on_all_message(self, event: AstrMessageEvent):
         """来首 / 是什么歌；顺便存图给对称用"""
         observe(event, self.store)
+        if not is_self_message(event):
+            try:
+                async for result in handle_sleep_wake(event, self.store):
+                    yield result
+            except Exception as exc:
+                logger.warning("sleep wake failed: %s", exc)
         msg = event.message_str or ""
         natural_song = (msg.startswith("来首") and len(msg) >= 2) or (
             msg.endswith("是什么歌") and len(msg) >= 4
@@ -247,7 +264,7 @@ class LifeBuddy(Star):
             logger.warning("on_all_message failed: %s", exc)
         if not is_public_group(event, self.settings):
             try:
-                async for result in process_group_chat(event, self.store):
+                async for result in process_group_chat(event, self.store, self.context):
                     yield result
             except Exception as exc:
                 logger.warning("group chat extras failed: %s", exc)

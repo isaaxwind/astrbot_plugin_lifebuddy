@@ -9,7 +9,7 @@ OVERVIEW = (
     "生活好基友\n"
     "/help <指令>  看某一条的用法\n"
     "\n"
-    "/ask  /rbdx  /rb  /nick  /dib  /advice  /fight  /复读  /金句  /city  /weather\n"
+    "/ask  /rbdx  /rb  /nick  /dib  /advice  /fight  /复读  /金句  /city  /weather  /sleep\n"
     "来首XXX  XXX是什么歌"
 )
 
@@ -38,13 +38,15 @@ TOPICS: dict[str, str] = {
     ),
     "rbdx": (
         "/rbdx  随机一首自制谱\n"
-        "/rbdx 12  指定等级"
+        "/rbdx 12  指定等级\n"
+        "关键词可用 * ? 通配，或 /正则/"
     ),
     "rbdx_admin": (
         "/rbdx  随机一首自制谱\n"
         "/rbdx 12  指定等级\n"
         "/rbdx arcade  /rbdx test  /rbdx test_all  /rbdx 英国人\n"
         "/rbdx arcade ryu  随机带 ryu 的街机谱，可再加等级\n"
+        "关键词可用 * ? 通配，或 /正则/\n"
         "test / test_all / 英国人 要在管理页填 wip_group_ids"
     ),
     "rb": (
@@ -56,6 +58,7 @@ TOPICS: dict[str, str] = {
         "/rb unbind [QQ或用户名]  仅管理员\n"
         "/rb song <关键词>  只搜自制谱\n"
         "  只中一首时带夹克；超过 20 首不列\n"
+        "  关键词可用 * ? 通配，或 /正则/\n"
         "/rb alias list\n"
         "/rb alias add <别名> <SongID或图片URL>\n"
         "/rb alias del <别名>  仅管理员"
@@ -70,6 +73,7 @@ TOPICS: dict[str, str] = {
         "/rb song [custom|arcade|test|test_all] <关键词>\n"
         "  默认搜自制+街机；开了内测群再加内测和英国人谱面\n"
         "  只中一首时带夹克；超过 20 首不列\n"
+        "  关键词可用 * ? 通配，或 /正则/\n"
         "/rb alias list\n"
         "/rb alias add <别名> <SongID或图片URL>\n"
         "/rb alias del <别名>  仅管理员"
@@ -79,13 +83,15 @@ TOPICS: dict[str, str] = {
         "/rb who  看自己绑的号\n"
         "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
         "/rb recent  最近一局（也可 /rb r）\n"
-        "/rb song <关键词>  只搜自制谱"
+        "/rb song <关键词>  只搜自制谱\n"
+        "  关键词可用 * ? 通配，或 /正则/"
     ),
     "rb_public": (
         "/rb bind  群里不能绑，请私聊机器人\n"
         "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
         "/rb song <关键词>  只搜自制谱\n"
-        "  只中一首时带夹克；超过 20 首不列"
+        "  只中一首时带夹克；超过 20 首不列\n"
+        "  关键词可用 * ? 通配，或 /正则/"
     ),
     "nick": (
         "/nick 上帝  给自己设称呼\n"
@@ -131,7 +137,7 @@ TOPICS: dict[str, str] = {
     "金句": (
         "/金句  昨日金句\n"
         "/金句 7  近7天\n"
-        "每天挑最长的 5 条；指令、链接、特殊字符、满 3 人的复读都不算\n"
+        "每天挑最长的 5 条；指令、对机器人说的话、链接、特殊字符、满 3 人的复读都不算\n"
         "0 点后本群第一条消息会报昨日金句"
     ),
     "city": (
@@ -142,6 +148,10 @@ TOPICS: dict[str, str] = {
     "weather": (
         "/weather  查自己城市的天气（先 /city）\n"
         "/weather <城市>  查指定城市"
+    ),
+    "sleep": (
+        "/sleep  去睡觉，回晚安\n"
+        "下次再说话会叫你，并说睡了多久"
     ),
 }
 
@@ -176,6 +186,8 @@ ALIASES = {
     "城市": "city",
     "weather": "weather",
     "天气": "weather",
+    "sleep": "sleep",
+    "睡觉": "sleep",
 }
 
 PUBLIC_TOPIC_KEYS = frozenset({"help", "rbdx", "rb"})

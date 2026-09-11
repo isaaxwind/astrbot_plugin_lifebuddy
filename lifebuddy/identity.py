@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from astrbot.api.event import AstrMessageEvent
 
 from .store import BuddyStore, NickRow
@@ -127,6 +129,115 @@ def deny_public_extras(event: AstrMessageEvent, settings, context=None) -> bool:
     if not is_public_group(event, settings):
         return False
     return not is_admin(event, context)
+
+
+def _truthy_event_flag(event: AstrMessageEvent, *names: str) -> bool:
+    for name in names:
+        value = getattr(event, name, None)
+        if callable(value):
+            try:
+                if value():
+                    return True
+            except TypeError:
+                continue
+        elif value:
+            return True
+    return False
+
+
+def _config_wake_tokens(context) -> list[str]:
+    tokens: list[str] = ["大肥鱼"]
+    if context is None:
+        return tokens
+    getter = getattr(context, "get_config", None)
+    if not callable(getter):
+        return tokens
+    try:
+        conf = getter()
+    except Exception:
+        return tokens
+    blobs: list = []
+    if isinstance(conf, dict):
+        blobs.append(conf)
+        nested = conf.get("provider_settings")
+        if isinstance(nested, dict):
+            blobs.append(nested)
+        platform = conf.get("platform_settings")
+        if isinstance(platform, dict):
+            blobs.append(platform)
+    else:
+        blobs.append(conf)
+        for key in ("provider_settings", "platform_settings"):
+            nested = getattr(conf, key, None)
+            if nested is not None:
+                blobs.append(nested)
+
+    def _get(obj, key, default=None):
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        getter = getattr(obj, "get", None)
+        if callable(getter):
+            try:
+                return getter(key, default)
+            except Exception:
+                return default
+        return getattr(obj, key, default)
+
+    for obj in blobs:
+        for key in ("wake_prefix", "wake_prefixes", "nickname", "nick_name"):
+            value = _get(obj, key)
+            if value is None:
+                continue
+            if isinstance(value, str):
+                items = [value]
+            elif isinstance(value, (list, tuple, set)):
+                items = [str(x) for x in value]
+            else:
+                continue
+            for item in items:
+                text = str(item or "").strip()
+                if text and text not in tokens:
+                    tokens.append(text)
+    return tokens
+
+
+_WAKE_PUNCT = re.compile(r"^[\s,，.。!！?？:：;；、]+")
+
+
+def is_directed_at_bot(event: AstrMessageEvent, context=None) -> bool:
+    """@ 机器人、唤醒词、或 AstrBot 判定会进 LLM 的消息。"""
+    if _truthy_event_flag(
+        event,
+        "is_at_or_wake_command",
+        "is_wake_command",
+        "is_wake",
+        "is_at_or_wake",
+    ):
+        return True
+    mine = self_id(event)
+    if mine and mine in mentioned_qqs(event):
+        return True
+    obj = getattr(event, "message_obj", None)
+    chain = getattr(obj, "message", None) or []
+    for item in chain:
+        if type(item).__name__ != "At":
+            continue
+        target = str(getattr(item, "qq", None) or getattr(item, "target", None) or "").strip()
+        if mine and target == mine:
+            return True
+    if _truthy_event_flag(event, "is_tome"):
+        return True
+    raw = (getattr(event, "message_str", None) or "").strip()
+    if not raw:
+        return False
+    for token in _config_wake_tokens(context):
+        if token in {"/", "／", "!", "！", ".", "。"}:
+            continue
+        if raw == token or raw.startswith(token):
+            rest = raw[len(token):]
+            if not rest or _WAKE_PUNCT.match(rest):
+                return True
+    return False
 
 
 def group_card(event: AstrMessageEvent) -> str:

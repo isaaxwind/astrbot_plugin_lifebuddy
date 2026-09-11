@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from astrbot.api.event import AstrMessageEvent
 
-from .identity import group_key, is_private_chat, is_self_message, self_id, sender_qq, stop_event
+from .identity import group_key, is_directed_at_bot, is_private_chat, is_self_message, self_id, sender_qq, stop_event
 from .store import BuddyStore
 
 TZ = ZoneInfo("Asia/Shanghai")
@@ -73,6 +73,7 @@ def _clip(text: str, limit: int = 40) -> str:
 _CMD_HEADS = {
     "help", "帮助", "ask", "rb", "rbdx", "nick", "dib", "advice", "fight",
     "复读", "fudu", "金句", "jiju", "city", "weather", "城市", "天气",
+    "sleep", "睡觉",
     "左对称", "右对称", "上对称", "下对称", "倒放",
     "对称", "对称左", "对称右", "对称上", "对称下",
 }
@@ -225,7 +226,7 @@ def _pick_recent_jiju(store: BuddyStore, gid: str) -> str:
     return random.choice(texts)
 
 
-async def process_group_chat(event: AstrMessageEvent, store: BuddyStore):
+async def process_group_chat(event: AstrMessageEvent, store: BuddyStore, context=None):
     if is_private_chat(event) or is_self_message(event):
         return
     gid = group_key(event)
@@ -255,7 +256,8 @@ async def process_group_chat(event: AstrMessageEvent, store: BuddyStore):
     repeating = bool(
         state and text == state.get("text") and len(state.get("people") or []) >= JIJU_REPEAT_BLOCK
     )
-    if is_jiju_text(text) and not repeating:
+    talking_to_bot = is_directed_at_bot(event, context)
+    if is_jiju_text(text) and not repeating and not talking_to_bot:
         store.add_jiju_candidate(gid, today_str(), text)
 
     if state and len(state.get("people") or []) > 1:
