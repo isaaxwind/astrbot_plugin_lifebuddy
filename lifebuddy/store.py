@@ -142,8 +142,10 @@ class BuddyStore:
                 updated_at INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS sleeps (
-                qq TEXT PRIMARY KEY,
-                slept_at INTEGER NOT NULL
+                group_id TEXT NOT NULL,
+                qq TEXT NOT NULL,
+                slept_at INTEGER NOT NULL,
+                PRIMARY KEY (group_id, qq)
             );
             CREATE INDEX IF NOT EXISTS idx_fudu_chains_group_ended
                 ON fudu_chains(group_id, ended_at);
@@ -158,6 +160,22 @@ class BuddyStore:
         if "seq" not in cols:
             self._conn.execute(
                 "ALTER TABLE fudu_chain_people ADD COLUMN seq INTEGER NOT NULL DEFAULT 0"
+            )
+        sleep_cols = {
+            str(r[1])
+            for r in self._conn.execute("PRAGMA table_info(sleeps)").fetchall()
+        }
+        if sleep_cols and "group_id" not in sleep_cols:
+            self._conn.execute("DROP TABLE sleeps")
+            self._conn.execute(
+                """
+                CREATE TABLE sleeps (
+                    group_id TEXT NOT NULL,
+                    qq TEXT NOT NULL,
+                    slept_at INTEGER NOT NULL,
+                    PRIMARY KEY (group_id, qq)
+                )
+                """
             )
         self._conn.commit()
 
@@ -749,40 +767,48 @@ class BuddyStore:
         self._conn.commit()
         return cur.rowcount > 0
 
-    def set_sleep(self, qq: str, slept_at: int | None = None) -> int:
+    def set_sleep(self, group_id: str, qq: str, slept_at: int | None = None) -> int:
+        gid = str(group_id or "").strip() or "private"
         qq = str(qq or "").strip()
         when = int(slept_at if slept_at is not None else time.time())
         if not qq:
             return when
         self._conn.execute(
             """
-            INSERT INTO sleeps(qq, slept_at) VALUES (?,?)
-            ON CONFLICT(qq) DO UPDATE SET slept_at = excluded.slept_at
+            INSERT INTO sleeps(group_id, qq, slept_at) VALUES (?,?,?)
+            ON CONFLICT(group_id, qq) DO UPDATE SET slept_at = excluded.slept_at
             """,
-            (qq, when),
+            (gid, qq, when),
         )
         self._conn.commit()
         return when
 
-    def peek_sleep(self, qq: str) -> int | None:
+    def peek_sleep(self, group_id: str, qq: str) -> int | None:
+        gid = str(group_id or "").strip() or "private"
         qq = str(qq or "").strip()
         if not qq:
             return None
         row = self._conn.execute(
-            "SELECT slept_at FROM sleeps WHERE qq = ?", (qq,)
+            "SELECT slept_at FROM sleeps WHERE group_id = ? AND qq = ?",
+            (gid, qq),
         ).fetchone()
         return int(row["slept_at"]) if row else None
 
-    def take_sleep(self, qq: str) -> int | None:
+    def take_sleep(self, group_id: str, qq: str) -> int | None:
+        gid = str(group_id or "").strip() or "private"
         qq = str(qq or "").strip()
         if not qq:
             return None
         row = self._conn.execute(
-            "SELECT slept_at FROM sleeps WHERE qq = ?", (qq,)
+            "SELECT slept_at FROM sleeps WHERE group_id = ? AND qq = ?",
+            (gid, qq),
         ).fetchone()
         if not row:
             return None
-        self._conn.execute("DELETE FROM sleeps WHERE qq = ?", (qq,))
+        self._conn.execute(
+            "DELETE FROM sleeps WHERE group_id = ? AND qq = ?",
+            (gid, qq),
+        )
         self._conn.commit()
         return int(row["slept_at"])
 

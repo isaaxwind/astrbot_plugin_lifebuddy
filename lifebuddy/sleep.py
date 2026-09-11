@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from astrbot.api.event import AstrMessageEvent
 
-from .identity import sender_qq
+from .identity import group_key, sender_qq
 from .store import BuddyStore
 
 TZ = ZoneInfo("Asia/Shanghai")
@@ -76,7 +76,7 @@ async def handle_sleep(event: AstrMessageEvent, store: BuddyStore):
     if not qq:
         yield event.plain_result("拿不到你的 QQ")
         return
-    store.set_sleep(qq)
+    store.set_sleep(group_key(event), qq)
     yield event.plain_result("晚安")
 
 
@@ -86,8 +86,9 @@ async def handle_sleep_wake(event: AstrMessageEvent, store: BuddyStore):
         return
     if _is_sleep_command(event.message_str or ""):
         return
-    slept_at = store.peek_sleep(qq)
+    gid = group_key(event)
+    slept_at = store.peek_sleep(gid, qq)
     if slept_at is None:
         return
-    store.take_sleep(qq)
+    store.take_sleep(gid, qq)
     yield event.plain_result(wake_text(slept_at))
