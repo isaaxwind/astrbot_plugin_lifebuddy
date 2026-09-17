@@ -183,6 +183,7 @@ def _config_wake_tokens(context) -> list[str]:
                 return default
         return getattr(obj, key, default)
 
+    skip = {"/", "／", "!", "！", ".", "。"}
     for obj in blobs:
         for key in ("wake_prefix", "wake_prefixes", "nickname", "nick_name"):
             value = _get(obj, key)
@@ -196,24 +197,34 @@ def _config_wake_tokens(context) -> list[str]:
                 continue
             for item in items:
                 text = str(item or "").strip()
-                if text and text not in tokens:
-                    tokens.append(text)
+                if len(text) < 2 or text in skip or text in tokens:
+                    continue
+                tokens.append(text)
     return tokens
 
 
 _WAKE_PUNCT = re.compile(r"^[\s,，.。!！?？:：;；、]+")
 
 
+def _event_plain_texts(event: AstrMessageEvent) -> list[str]:
+    texts: list[str] = []
+    raw = (getattr(event, "message_str", None) or "").strip()
+    if raw:
+        texts.append(raw)
+    obj = getattr(event, "message_obj", None)
+    payload = getattr(obj, "raw_message", None) if obj is not None else None
+    if isinstance(payload, str) and payload.strip():
+        texts.append(payload.strip())
+    elif isinstance(payload, dict):
+        for key in ("raw_message", "message"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                texts.append(value.strip())
+    return texts
+
+
 def is_directed_at_bot(event: AstrMessageEvent, context=None) -> bool:
-    """@ 机器人、唤醒词、或 AstrBot 判定会进 LLM 的消息。"""
-    if _truthy_event_flag(
-        event,
-        "is_at_or_wake_command",
-        "is_wake_command",
-        "is_wake",
-        "is_at_or_wake",
-    ):
-        return True
+    """明确 @ 机器人或带唤醒词；不用 is_wake，群里开了 LLM 时它会对所有消息为真。"""
     mine = self_id(event)
     if mine and mine in mentioned_qqs(event):
         return True
@@ -227,16 +238,12 @@ def is_directed_at_bot(event: AstrMessageEvent, context=None) -> bool:
             return True
     if _truthy_event_flag(event, "is_tome"):
         return True
-    raw = (getattr(event, "message_str", None) or "").strip()
-    if not raw:
-        return False
-    for token in _config_wake_tokens(context):
-        if token in {"/", "／", "!", "！", ".", "。"}:
-            continue
-        if raw == token or raw.startswith(token):
-            rest = raw[len(token):]
-            if not rest or _WAKE_PUNCT.match(rest):
-                return True
+    for raw in _event_plain_texts(event):
+        for token in _config_wake_tokens(context):
+            if raw == token or raw.startswith(token):
+                rest = raw[len(token):]
+                if not rest or _WAKE_PUNCT.match(rest):
+                    return True
     return False
 
 

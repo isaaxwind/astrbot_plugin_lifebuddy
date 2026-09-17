@@ -34,7 +34,9 @@ def _is_image(item: object) -> bool:
 
 def _is_video(item: object) -> bool:
     name = type(item).__name__
-    if name == "Video" or (VideoComp is not None and isinstance(item, VideoComp)):
+    if name.lower() in {"video", "shortvideo", "short_video"}:
+        return True
+    if VideoComp is not None and isinstance(item, VideoComp):
         return True
     if name == "File":
         raw = str(getattr(item, "name", None) or getattr(item, "file", None) or "")
@@ -63,23 +65,42 @@ def message_chain(event: AstrMessageEvent) -> list[Any]:
     return list(getattr(obj, "message", None) or [])
 
 
-def event_message_id(event: AstrMessageEvent) -> str:
+def event_message_ids(event: AstrMessageEvent) -> list[str]:
+    found: list[str] = []
     obj = getattr(event, "message_obj", None)
-    if obj is None:
-        return ""
-    for key in ("message_id", "message_seq"):
-        value = getattr(obj, key, None)
-        if value not in (None, "", 0):
-            return str(value)
-    return ""
-
-
-def reply_message_id(event: AstrMessageEvent) -> str:
-    for item in message_chain(event):
-        if _is_reply(item):
-            value = getattr(item, "id", None)
+    if obj is not None:
+        for key in ("message_id", "message_seq", "id"):
+            value = getattr(obj, key, None)
             if value not in (None, "", 0):
-                return str(value)
+                text = str(value)
+                if text not in found:
+                    found.append(text)
+        raw = getattr(obj, "raw_message", None)
+        if isinstance(raw, dict):
+            for key in ("message_id", "message_seq", "id"):
+                value = raw.get(key)
+                if value not in (None, "", 0):
+                    text = str(value)
+                    if text not in found:
+                        found.append(text)
+    return found
+
+
+def reply_message_ids(event: AstrMessageEvent) -> list[str]:
+    found: list[str] = []
+
+    def add(value) -> None:
+        if value not in (None, "", 0):
+            text = str(value)
+            if text not in found:
+                found.append(text)
+
+    for item in message_chain(event):
+        if not _is_reply(item):
+            continue
+        add(getattr(item, "id", None))
+        add(getattr(item, "message_id", None))
+        add(getattr(item, "message_seq", None))
     obj = getattr(event, "message_obj", None)
     raw = getattr(obj, "raw_message", None) if obj is not None else None
     segments = None
@@ -94,10 +115,16 @@ def reply_message_id(event: AstrMessageEvent) -> str:
             if str(seg.get("type") or "") != "reply":
                 continue
             data = seg.get("data") or {}
-            value = data.get("id") if isinstance(data, dict) else None
-            if value not in (None, "", 0):
-                return str(value)
-    return ""
+            if isinstance(data, dict):
+                add(data.get("id"))
+                add(data.get("message_id"))
+                add(data.get("message_seq"))
+    return found
+
+
+def reply_message_id(event: AstrMessageEvent) -> str:
+    ids = reply_message_ids(event)
+    return ids[0] if ids else ""
 
 
 def sniff_media(data: bytes) -> str:
@@ -148,6 +175,26 @@ def _ffmpeg_bin() -> str:
     return shutil.which("ffmpeg") or ""
 
 
+def _open_local_ref(value: str) -> str | None:
+    raw = (value or "").strip()
+    if not raw or raw.startswith(("http://", "https://", "base64://")):
+        return None
+    candidates = [Path(raw)]
+    if raw.startswith("file://"):
+        stripped = raw[7:]
+        if stripped.startswith("/") and len(stripped) >= 3 and stripped[2] == ":":
+            stripped = stripped[1:]
+        candidates.append(Path(stripped))
+        candidates.append(Path(raw.replace("file:///", "").replace("file://", "")))
+    for path in candidates:
+        try:
+            if path.is_file():
+                return str(path)
+        except OSError:
+            continue
+    return None
+
+
 async def _read_component_path(item: object) -> str | None:
     convert = getattr(item, "convert_to_file_path", None)
     if callable(convert):
@@ -159,14 +206,15 @@ async def _read_component_path(item: object) -> str | None:
             pass
     for attr in ("url", "file", "path"):
         value = getattr(item, attr, None)
-        if isinstance(value, str) and value.startswith(("http://", "https://")):
+        if not isinstance(value, str) or not value:
+            continue
+        if value.startswith(("http://", "https://")):
             path = await _download_file(value)
             if path:
                 return path
-        if isinstance(value, str) and value and not value.startswith(("http", "base64://")):
-            path = Path(value.removeprefix("file:///"))
-            if path.is_file():
-                return str(path)
+        local = _open_local_ref(value)
+        if local:
+            return local
     return None
 
 
@@ -254,6 +302,10 @@ async def _call_get_msg(event: AstrMessageEvent, reply_id: str) -> Any:
 
 
 def _urls_from_get_msg(payload: Any) -> list[str]:
+    return [ref for kind, ref in _media_refs_from_get_msg(payload) if kind == "url"]
+
+
+def _media_refs_from_get_msg(payload: Any) -> list[tuple[str, str]]:
     data = payload
     if isinstance(payload, dict) and "message" not in payload:
         data = payload.get("data") or payload
@@ -264,12 +316,12 @@ def _urls_from_get_msg(payload: Any) -> list[str]:
         segments = data
     if not isinstance(segments, list):
         return []
-    urls: list[str] = []
+    refs: list[tuple[str, str]] = []
     for seg in segments:
         if not isinstance(seg, dict):
             continue
-        kind = str(seg.get("type") or "")
-        if kind not in ("image", "img", "mface", "video", "file"):
+        kind = str(seg.get("type") or "").lower()
+        if kind not in ("image", "img", "mface", "video", "shortvideo", "short_video", "file"):
             continue
         body = seg.get("data") or {}
         if not isinstance(body, dict):
@@ -278,24 +330,117 @@ def _urls_from_get_msg(payload: Any) -> list[str]:
             name = str(body.get("name") or body.get("file") or "")
             if Path(name.split("?")[0]).suffix.lower() not in _VIDEO_EXT | {".gif", ".png", ".jpg", ".jpeg", ".webp"}:
                 continue
-        for key in ("url", "file"):
+        for key in ("url", "file", "path"):
             value = body.get(key)
-            if isinstance(value, str) and value.startswith(("http://", "https://")):
-                urls.append(value)
-    return urls
+            if not isinstance(value, str) or not value:
+                continue
+            if value.startswith(("http://", "https://")):
+                refs.append(("url", value))
+            local = _open_local_ref(value)
+            if local:
+                refs.append(("file", local))
+    return refs
+
+
+async def _call_get_file(event: AstrMessageEvent, file_id: str) -> str | None:
+    bot = getattr(event, "bot", None)
+    if bot is None or not file_id:
+        return None
+    callers = [
+        getattr(bot, "call_action", None),
+        getattr(getattr(bot, "api", None), "call_action", None),
+    ]
+    payload = None
+    for call in callers:
+        if not callable(call):
+            continue
+        try:
+            payload = await call("get_file", file_id=file_id)
+            break
+        except Exception:
+            continue
+    if not isinstance(payload, dict):
+        return None
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    for key in ("file", "path", "url"):
+        value = data.get(key) if isinstance(data, dict) else None
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            return await _download_file(value)
+        local = _open_local_ref(str(value or ""))
+        if local:
+            return local
+    return None
+
+
+def _file_ids_from_get_msg(payload: Any) -> list[str]:
+    data = payload
+    if isinstance(payload, dict) and "message" not in payload:
+        data = payload.get("data") or payload
+    segments = None
+    if isinstance(data, dict):
+        segments = data.get("message") or data.get("message_list")
+    elif isinstance(data, list):
+        segments = data
+    if not isinstance(segments, list):
+        return []
+    ids: list[str] = []
+    for seg in segments:
+        if not isinstance(seg, dict):
+            continue
+        kind = str(seg.get("type") or "").lower()
+        if kind not in ("video", "shortvideo", "short_video", "file", "image", "img"):
+            continue
+        body = seg.get("data") or {}
+        if not isinstance(body, dict):
+            continue
+        for key in ("file_id", "fileId"):
+            value = body.get(key)
+            if isinstance(value, str) and value and value not in ids:
+                ids.append(value)
+        file_val = body.get("file")
+        if isinstance(file_val, str) and file_val and not file_val.startswith(("http://", "https://", "file://", "/")):
+            if file_val not in ids:
+                ids.append(file_val)
+    return ids
+
+
+async def _media_from_get_msg(event: AstrMessageEvent, msg_id: str) -> str | None:
+    payload = await _call_get_msg(event, msg_id)
+    for kind, ref in _media_refs_from_get_msg(payload):
+        if kind == "file":
+            return ref
+        path = await _download_file(ref)
+        if path:
+            return path
+    for file_id in _file_ids_from_get_msg(payload):
+        path = await _call_get_file(event, file_id)
+        if path:
+            return path
+    return None
+
+
+def _cache_put(cache: ImageCache, path: str, ids: list[str]) -> None:
+    for mid in ids:
+        if mid:
+            cache.put_file(mid, path)
 
 
 async def ingest_event_image(event: AstrMessageEvent, cache: ImageCache) -> None:
-    mid = event_message_id(event)
-    if not mid:
-        return
+    ids = event_message_ids(event)
+    path = None
     for item in message_chain(event):
         if not _is_media(item):
             continue
         path = await _read_component_path(item)
         if path:
-            cache.put_file(mid, path)
-        return
+            break
+    if not path:
+        for mid in ids:
+            path = await _media_from_get_msg(event, mid)
+            if path:
+                break
+    if path:
+        _cache_put(cache, path, ids)
 
 
 async def resolve_media_path(event: AstrMessageEvent, cache: ImageCache) -> str | None:
@@ -311,16 +456,16 @@ async def resolve_media_path(event: AstrMessageEvent, cache: ImageCache) -> str 
                     path = await _read_component_path(sub)
                     if path:
                         return path
-    reply_id = reply_message_id(event)
-    if reply_id:
-        cached = cache.get_path(reply_id)
-        if cached:
-            return str(cached)
-        payload = await _call_get_msg(event, reply_id)
-        for url in _urls_from_get_msg(payload):
-            path = await _download_file(url)
+    reply_ids = reply_message_ids(event)
+    if reply_ids:
+        for reply_id in reply_ids:
+            cached = cache.get_path(reply_id)
+            if cached:
+                return str(cached)
+        for reply_id in reply_ids:
+            path = await _media_from_get_msg(event, reply_id)
             if path:
-                cache.put_file(reply_id, path)
+                _cache_put(cache, path, reply_ids)
                 return path
         return None
     url = _avatar_url(event)
@@ -584,7 +729,7 @@ async def handle_symmetry(event: AstrMessageEvent, cache: ImageCache, action: st
     except Exception:
         src = None
     if not src:
-        if reply_message_id(event):
+        if reply_message_ids(event):
             yield event.plain_result("这张图我没存到")
             return
         yield event.plain_result("头像拿不到")

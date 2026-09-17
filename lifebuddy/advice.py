@@ -91,7 +91,8 @@ async def handle_advice(
                 return
         await rbdx.upsert_advice_comment(account, song_id, comment, is_ok)
         mark = "过" if is_ok == 1 else "要改"
-        yield event.plain_result(f"已评 {title} ({song_id}) [{mark}]")
+        extra = f"  谱师 {author}" if author else ""
+        yield event.plain_result(f"已评 {title} ({song_id}) [{mark}]{extra}")
     except Exception as exc:
         yield event.plain_result(short_api_error(exc))
 
@@ -113,7 +114,9 @@ async def _render_list(rbdx: RbdxAPI, account: str, cache: NumberedCache, gid: s
         diff = DIFF_LABEL.get(int(item.get("difficulty") or 0), "?")
         level = item.get("diff")
         mark = "已评" if item.get("reviewedByMe") else "未评"
-        lines.append(f"{i}. {title}  {diff}{level}  {song_id}  {mark}")
+        author = str(item.get("chartAuthor") or item.get("creator") or "").strip()
+        extra = f"  {author}" if author else ""
+        lines.append(f"{i}. {title}  {diff}{level}  {song_id}{extra}  {mark}")
     return "\n".join(lines)
 
 
@@ -188,9 +191,15 @@ def _is_brit_reviewer(who: str, store: BuddyStore | None = None) -> bool:
 
 async def _render_comments(rbdx: RbdxAPI, store: BuddyStore, song_id: int, title: str) -> str:
     comments = await rbdx.list_advice_comments(song_id)
+    creator, author = await _people(rbdx, None, song_id)
+    head = f"{title} ({song_id})"
+    if author:
+        head += f"  谱师 {author}"
+    elif creator:
+        head += f"  {creator}"
     if not comments:
-        return f"{title} ({song_id}) 还没人评"
-    lines = [f"{title} ({song_id})"]
+        return f"{head} 还没人评"
+    lines = [head]
     for row in comments:
         who = row.get("accountName") or "?"
         text = (row.get("comment") or "").strip()
