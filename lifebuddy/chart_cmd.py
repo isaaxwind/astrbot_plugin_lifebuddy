@@ -67,17 +67,13 @@ async def handle_chart(event: AstrMessageEvent, runtime, parts: list[str]):
         if ext_id > 0 and difficulty == "H" and ((query.isdigit() and int(query) == ext_id) or ext_id in alias_ids):
             difficulty = "SP"
         song_id = chart_song_id(song, difficulty)
-        pages = await runtime.rbdx.fetch_chart_images(song_id, difficulty, restricted=kind != "custom")
+        image = await runtime.rbdx.fetch_chart_image(song_id, difficulty, restricted=kind != "custom")
     except Exception as exc:
         logger.warning("chart image failed: %s", exc)
         yield event.plain_result(f"谱面图片获取失败：{exc}")
         return
 
-    for i, path in enumerate(pages, 1):
-        result = event.make_result()
-        result.chain = [
-            Plain(f'{song.get("name") or song_id} · {difficulty}  [{i}/{len(pages)}]\n'),
-            Image(file=path),
-        ]
-        result.use_t2i(False)
-        yield result
+    result = event.make_result()
+    result.chain = [Plain(f'{song.get("name") or song_id} · {difficulty}\n'), Image(file=image)]
+    result.use_t2i(False)
+    yield result

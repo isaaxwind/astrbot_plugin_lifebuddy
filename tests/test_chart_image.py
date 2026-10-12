@@ -29,7 +29,7 @@ except ImportError:
 from PIL import Image as PILImage
 from aiohttp import web
 from lifebuddy.chart_cmd import handle_chart
-from lifebuddy.chart_image import chart_song_id, parse_chart_args, split_chart_image
+from lifebuddy.chart_image import chart_song_id, parse_chart_args, store_chart_image
 from lifebuddy.image_cache import ImageCache
 from lifebuddy.rbdx import RbdxAPI
 from lifebuddy.settings import Settings
@@ -52,20 +52,20 @@ class ImageTests(unittest.TestCase):
         self.assertEqual(chart_song_id({"id": 1, "special": {"ExtID": 2}}, "SP"), 2)
         self.assertEqual(chart_song_id({"id": 1, "special": {"ExtID": 2}}, "H"), 1)
 
-    def test_pagination_keeps_all_columns(self):
+    def test_full_png_is_kept_byte_for_byte(self):
         with tempfile.TemporaryDirectory() as root:
-            paths = split_chart_image(png(3), 3, 800, 16, ImageCache(Path(root)))
-            self.assertEqual(len(paths), 2)
-            with PILImage.open(paths[0]) as first, PILImage.open(paths[1]) as last:
-                self.assertEqual(first.size, (1616, 512))
-                self.assertEqual(last.size, (800, 512))
-                self.assertEqual(first.getpixel((820, 10)), (30, 40, 70))
-                self.assertEqual(last.getpixel((10, 10)), (60, 40, 70))
+            data = png(3)
+            path = store_chart_image(data, 3, 800, 16, ImageCache(Path(root)))
+            self.assertEqual(Path(path).read_bytes(), data)
+            self.assertEqual(len(list(Path(root).iterdir())), 1)
+            with PILImage.open(path) as image:
+                self.assertEqual(image.size, (2432, 512))
+                self.assertEqual(image.getpixel((1640, 10)), (60, 40, 70))
 
     def test_layout_mismatch_rejected(self):
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaises(ValueError):
-                split_chart_image(png(3), 2, 800, 16, ImageCache(Path(root)))
+                store_chart_image(png(3), 2, 800, 16, ImageCache(Path(root)))
 
 
 class Event:
@@ -89,9 +89,9 @@ class FakeAPI:
             "brit": [],
         }
     async def fetch_catalog(self, kind): return self.catalogs.get(kind, [])
-    async def fetch_chart_images(self, song_id, difficulty, *, restricted=False):
+    async def fetch_chart_image(self, song_id, difficulty, *, restricted=False):
         self.calls.append((song_id, difficulty, restricted))
-        return ["page1.png", "page2.png"]
+        return "chart.png"
 
 
 class CommandTests(unittest.IsolatedAsyncioTestCase):
@@ -113,7 +113,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
         runtime = self.runtime()
         result = [r async for r in handle_chart(Event(), runtime, ["123", "M"])]
         self.assertEqual(runtime.rbdx.calls, [(123, "M", False)])
-        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result), 1)
         self.assertFalse(result[0].t2i)
 
     async def test_special_id_and_exact_title(self):
@@ -173,13 +173,15 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_download_png_headers_and_restricted_user(self):
         with patch("lifebuddy.image_cache.ImageCache", side_effect=lambda: ImageCache(Path(self.temp.name))):
-            paths = await self.api.fetch_chart_images(123, "SP", restricted=True)
-        self.assertEqual(len(paths), 2)
+            path = await self.api.fetch_chart_image(123, "SP", restricted=True)
+        self.assertTrue(Path(path).is_file())
+        with PILImage.open(path) as image:
+            self.assertEqual(image.size, (2432, 512))
         self.assertEqual(self.seen[0], ({"songId": "123", "difficulty": "SP", "user": "ayulsam"}, "test-token"))
 
     async def test_missing_difficulty_is_clear_error(self):
         with self.assertRaisesRegex(RuntimeError, "raw"):
-            await self.api.fetch_chart_images(404)
+            await self.api.fetch_chart_image(404)
 
 
 if __name__ == "__main__":

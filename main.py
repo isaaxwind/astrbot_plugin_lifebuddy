@@ -34,7 +34,7 @@ from .lifebuddy.symmetry import handle_symmetry, ingest_event_image
 from .lifebuddy.weather import WeatherClient, handle_city, handle_weather
 
 
-@register("lifebuddy", "Isaax", "生活好基友", "1.1.0")
+@register("lifebuddy", "Isaax", "生活好基友", "1.2.0")
 class LifeBuddy(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)

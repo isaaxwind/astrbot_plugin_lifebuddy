@@ -9,7 +9,7 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 | `/rbdx` / `/rbdx 12` | 随机自制谱，可选指定 B/M/H 等级 |
 | `/rbdx arcade ryu` | 管理群：随机一首街机里带 ryu 的谱；街机不显示谱师 |
 | `/rbdx test 12` / `/rbdx test_all` | 管理群+内测群：内测 / 全部内测 |
-| `/rb chart <曲名或SongID> [B/M/H/SP]` | 输出谱面图片，默认 H；也可用 `/rb 谱面`，每张两列 |
+| `/rb chart <曲名或SongID> [B/M/H/SP]` | 输出谱面图片，默认 H；也可用 `/rb 谱面`，只返回一张完整原图 |
 | `/rb chart arcade <曲名或SongID> H` | 管理群街机谱；test/test_all/英国人沿用内测群权限 |
 | `/rb song 关键词` | 外面只搜自制；管理群才加街机，内测群再加内测和英国人谱面 |
 | `/rb song arcade 关键词` | 管理群才能指定 arcade / test / 英国人 |
@@ -35,4 +35,4 @@ QQ / 称呼 / 口香 / 绑号在 SQLite：`data/plugin_data/lifebuddy/lifebuddy.
 
 `/advice` 默认全关，在 AstrBot 插件管理页把群号填进 `advice_group_ids`。`/rbdx test` 同理，填 `wip_group_ids`。街机和群内绑号只给管理群，填 `admin_group_ids`；不填则回退审核群+内测群。
 
-谱面图片使用现有 `rbdx_api_base` 的 `/bot/chart-image/`，不需要新增配置。支持曲名、完整 SongID、精确登记别名和 SP 扩展谱 ID；多首匹配时列出 SongID。自动分页保留全部音符，图片保存在现有 ImageCache，遵循现有代理设置。
+谱面图片使用现有 `rbdx_api_base` 的 `/bot/chart-image/`，不需要新增配置。支持曲名、完整 SongID、精确登记别名和 SP 扩展谱 ID；多首匹配时列出 SongID。直接保存并返回 editor Linux 导图程序生成的完整 PNG，不拆分、不缩放、不重新编码。保留 editor 的随机排布、LO/SO 绘制与默认 480 px/s；图片保存在现有 ImageCache，遵循现有代理设置。

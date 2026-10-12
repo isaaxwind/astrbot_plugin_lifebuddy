@@ -504,9 +504,9 @@ class RbdxAPI:
             url += f"&user={CATALOG_USER}"
         return url
 
-    async def fetch_chart_images(self, song_id: int, difficulty: str = "H", *, restricted: bool = False) -> list[str]:
-        """Fetch PNG with the API session/proxy/token and save readable column pages."""
-        from .chart_image import split_chart_image
+    async def fetch_chart_image(self, song_id: int, difficulty: str = "H", *, restricted: bool = False) -> str:
+        """Fetch and preserve one complete PNG from the editor exporter."""
+        from .chart_image import store_chart_image
         from .image_cache import ImageCache
 
         params: dict[str, Any] = {"songId": int(song_id), "difficulty": difficulty}
@@ -520,7 +520,7 @@ class RbdxAPI:
             for attempt in range(3):
                 async with session.get(
                     url, params=params, headers=headers, proxy=self._proxy(),
-                    timeout=aiohttp.ClientTimeout(total=60),
+                    timeout=aiohttp.ClientTimeout(total=90),
                 ) as response:
                     if response.status == 429 and attempt < 2:
                         await response.read()
@@ -532,13 +532,13 @@ class RbdxAPI:
                         raise RuntimeError(f"导图接口 HTTP {response.status}")
                     if response.content_type != "image/png":
                         raise RuntimeError("导图接口没有返回 PNG")
-                    limit = 32 * 1024 * 1024
+                    limit = 128 * 1024 * 1024
                     if response.content_length is not None and response.content_length > limit:
-                        raise RuntimeError("谱面图片超过 32 MB")
+                        raise RuntimeError("谱面图片超过 128 MB")
                     data = bytearray()
                     async for chunk in response.content.iter_chunked(65536):
                         if len(data) + len(chunk) > limit:
-                            raise RuntimeError("谱面图片超过 32 MB")
+                            raise RuntimeError("谱面图片超过 128 MB")
                         data.extend(chunk)
                     if not data.startswith(b"\x89PNG\r\n\x1a\n"):
                         raise RuntimeError("导图接口返回的 PNG 无效")
@@ -549,7 +549,7 @@ class RbdxAPI:
                     except (KeyError, ValueError) as exc:
                         raise RuntimeError("导图接口缺少有效布局信息") from exc
                 cache = ImageCache()
-                return await asyncio.to_thread(split_chart_image, bytes(data), columns, width, gap, cache)
+                return await asyncio.to_thread(store_chart_image, bytes(data), columns, width, gap, cache)
         raise RuntimeError("导图接口繁忙，请稍后重试")
 
     async def fetch_custom_catalog(self, *, force: bool = False) -> list[dict[str, Any]]:

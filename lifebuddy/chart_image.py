@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
-from pathlib import Path
+import warnings
 
 from PIL import Image as PILImage
 
@@ -28,24 +28,21 @@ def chart_song_id(song: dict, difficulty: str) -> int:
     return int(special.get("ExtID") or song["id"]) if difficulty == "SP" else int(song["id"])
 
 
-def split_chart_image(data: bytes, columns: int, column_width: int, gap: int, cache: ImageCache) -> list[str]:
-    """Keep two complete time columns per image, so QQ does not shrink the full chart."""
-    if not 1 <= columns <= 64 or not 560 <= column_width <= 1200 or not 0 <= gap <= 32:
+def store_chart_image(data: bytes, columns: int, column_width: int, gap: int, cache: ImageCache) -> str:
+    """Validate and retain the exact full PNG from the editor; never crop or resize."""
+    if not 1 <= columns <= 64 or not 560 <= column_width <= 2000 or not 0 <= gap <= 32:
         raise ValueError("谱面图片布局无效")
+    with warnings.catch_warnings():
+        # The editor intentionally supports up to 160 MP, beyond Pillow's warning threshold.
+        warnings.simplefilter("ignore", PILImage.DecompressionBombWarning)
+        with PILImage.open(io.BytesIO(data)) as image:
+            if image.format != "PNG" or image.width != columns * (column_width + gap) - gap:
+                raise ValueError("谱面图片尺寸与接口布局不符")
+            if image.width > 32767 or not 120 <= image.height <= 16384 or image.width * image.height > 160_000_000:
+                raise ValueError("谱面图片超过 editor 上限")
+            image.verify()
     digest = hashlib.sha256(data).hexdigest()[:24]
-    paths = []
-    with PILImage.open(io.BytesIO(data)) as image:
-        if image.format != "PNG" or image.width != columns * (column_width + gap) - gap:
-            raise ValueError("谱面图片尺寸与接口布局不符")
-        if not 120 <= image.height <= 8192 or image.width * image.height > 64_000_000:
-            raise ValueError("谱面图片过大")
-        image.load()
-        for first in range(0, columns, 2):
-            count = min(2, columns - first)
-            left = first * (column_width + gap)
-            page = image.crop((left, 0, left + count * (column_width + gap) - gap, image.height))
-            path = cache.path_for(f"chart-{digest}-{first // 2 + 1}.png")
-            page.save(path, format="PNG", optimize=True)
-            paths.append(str(path))
-    cache.prune()
-    return paths
+    path = cache.put(f"chart-{digest}.png", data)
+    if path is None:
+        raise RuntimeError("谱面图片保存失败")
+    return str(path)
