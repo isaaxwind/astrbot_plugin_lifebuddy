@@ -17,7 +17,7 @@ OVERVIEW_PUBLIC = (
     "生活好基友\n"
     "/help <指令>  看某一条的用法\n"
     "\n"
-    "/rbdx  /rb bind  /rb user  /rb song"
+    "/rbdx  /rb bind  /rb user  /rb song  /rb chart"
 )
 
 TOPICS: dict[str, str] = {
@@ -56,6 +56,7 @@ TOPICS: dict[str, str] = {
         "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
         "/rb recent  最近一局（也可 /rb r）\n"
         "/rb unbind [QQ或用户名]  仅管理员\n"
+        "/rb chart <曲名或SongID> [B/M/H/SP]  谱面图片（默认 H）\n"
         "/rb song <关键词>  只搜自制谱\n"
         "  只中一首时带夹克；超过 20 首不列\n"
         "  关键词可用 * ? 通配，或 /正则/\n"
@@ -70,6 +71,7 @@ TOPICS: dict[str, str] = {
         "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
         "/rb recent  最近一局（也可 /rb r）\n"
         "/rb unbind [QQ或用户名]  仅管理员\n"
+        "/rb chart [custom|arcade|test|test_all|英国人] <曲名或SongID> [B/M/H/SP]\n"
         "/rb song [custom|arcade|test|test_all] <关键词>\n"
         "  默认搜自制+街机；开了内测群再加内测和英国人谱面\n"
         "  只中一首时带夹克；超过 20 首不列\n"
@@ -83,12 +85,14 @@ TOPICS: dict[str, str] = {
         "/rb who  看自己绑的号\n"
         "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
         "/rb recent  最近一局（也可 /rb r）\n"
+        "/rb chart <曲名或SongID> [B/M/H/SP]  谱面图片（默认 H）\n"
         "/rb song <关键词>  只搜自制谱\n"
         "  关键词可用 * ? 通配，或 /正则/"
     ),
     "rb_public": (
         "/rb bind  群里不能绑，请私聊机器人\n"
         "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
+        "/rb chart <曲名或SongID> [B/M/H/SP]  谱面图片（默认 H）\n"
         "/rb song <关键词>  只搜自制谱\n"
         "  只中一首时带夹克；超过 20 首不列\n"
         "  关键词可用 * ? 通配，或 /正则/"

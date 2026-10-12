@@ -374,6 +374,7 @@ class RbdxAPI:
     def __init__(self, settings: Settings):
         self.settings = settings
         self._session: aiohttp.ClientSession | None = None
+        self._chart_image_lock = asyncio.Lock()
         self._catalogs: dict[str, list[dict[str, Any]]] = {}
         self._catalog_at: dict[str, float] = {}
         self._catalog_url: dict[str, str] = {}
@@ -502,6 +503,54 @@ class RbdxAPI:
         if kind in ("arcade", "test", "test_all"):
             url += f"&user={CATALOG_USER}"
         return url
+
+    async def fetch_chart_images(self, song_id: int, difficulty: str = "H", *, restricted: bool = False) -> list[str]:
+        """Fetch PNG with the API session/proxy/token and save readable column pages."""
+        from .chart_image import split_chart_image
+        from .image_cache import ImageCache
+
+        params: dict[str, Any] = {"songId": int(song_id), "difficulty": difficulty}
+        if restricted:
+            params["user"] = CATALOG_USER
+        url = f"{self.settings.rbdx_api_base}/bot/chart-image/"
+        headers = self._bot_headers()
+        headers["Accept"] = "image/png"
+        async with self._chart_image_lock:
+            session = await self._session_get()
+            for attempt in range(3):
+                async with session.get(
+                    url, params=params, headers=headers, proxy=self._proxy(),
+                    timeout=aiohttp.ClientTimeout(total=60),
+                ) as response:
+                    if response.status == 429 and attempt < 2:
+                        await response.read()
+                        await asyncio.sleep(3)
+                        continue
+                    if response.status == 404:
+                        raise RuntimeError("该难度没有 raw 谱面，或谱面尚未开放")
+                    if response.status != 200:
+                        raise RuntimeError(f"导图接口 HTTP {response.status}")
+                    if response.content_type != "image/png":
+                        raise RuntimeError("导图接口没有返回 PNG")
+                    limit = 32 * 1024 * 1024
+                    if response.content_length is not None and response.content_length > limit:
+                        raise RuntimeError("谱面图片超过 32 MB")
+                    data = bytearray()
+                    async for chunk in response.content.iter_chunked(65536):
+                        if len(data) + len(chunk) > limit:
+                            raise RuntimeError("谱面图片超过 32 MB")
+                        data.extend(chunk)
+                    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+                        raise RuntimeError("导图接口返回的 PNG 无效")
+                    try:
+                        columns = int(response.headers["X-Chart-Columns"])
+                        width = int(response.headers["X-Chart-Column-Width"])
+                        gap = int(response.headers.get("X-Chart-Gap", "16"))
+                    except (KeyError, ValueError) as exc:
+                        raise RuntimeError("导图接口缺少有效布局信息") from exc
+                cache = ImageCache()
+                return await asyncio.to_thread(split_chart_image, bytes(data), columns, width, gap, cache)
+        raise RuntimeError("导图接口繁忙，请稍后重试")
 
     async def fetch_custom_catalog(self, *, force: bool = False) -> list[dict[str, Any]]:
         return await self.fetch_catalog("custom", force=force)

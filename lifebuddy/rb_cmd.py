@@ -6,6 +6,7 @@ from astrbot.api.event import AstrMessageEvent
 from astrbot.api.message_components import At, Image, Plain
 
 from .aliases import AliasStore
+from .chart_cmd import handle_chart
 from .identity import (
     deny_public_extras,
     group_key,
@@ -21,7 +22,7 @@ from .rbdx import RbdxAPI, catalog_kind_label, hide_charter, parse_catalog_kind
 from .settings import Settings
 from .store import BuddyStore
 
-_PUBLIC_RB_ACTIONS = frozenset({"bind", "user", "song"})
+_PUBLIC_RB_ACTIONS = frozenset({"bind", "user", "song", "chart", "谱面"})
 
 
 def _rb_help(event: AstrMessageEvent, runtime: RbRuntime) -> str:
@@ -41,7 +42,8 @@ def _rb_help(event: AstrMessageEvent, runtime: RbRuntime) -> str:
             "RBDX\n"
             f"{bind}\n"
             "/rb user <用户名或四位ID>  查 SKP / 总 PC\n"
-            f"{song}"
+            f"{song}\n"
+            "/rb chart <曲名或SongID> [B/M/H/SP]  谱面图片"
         )
     return (
         "RBDX\n"
@@ -51,6 +53,7 @@ def _rb_help(event: AstrMessageEvent, runtime: RbRuntime) -> str:
         "/rb recent  （/rb r）\n"
         "/rb unbind [QQ或用户名]  （仅管理员）\n"
         f"{song}\n"
+        "/rb chart <曲名或SongID> [B/M/H/SP]  谱面图片\n"
         "/rb alias list\n"
         "/rb alias add <别名> <SongID或图片URL>\n"
         "/rb alias del <别名>  （仅管理员）"
@@ -106,6 +109,11 @@ async def handle_rb(event: AstrMessageEvent, runtime: RbRuntime):
 
     if action == "alias":
         async for result in _alias(event, runtime, rest):
+            yield result
+        return
+
+    if action in ("chart", "谱面"):
+        async for result in handle_chart(event, runtime, rest):
             yield result
         return
 
