@@ -120,6 +120,7 @@ TOPICS: dict[str, str] = {
     ),
     "fight": (
         "/fight  要打的谱面列表（按谱面编号，不是按歌）\n"
+        "/fight <编号>  看当前打架信息、均分和投票明细\n"
         "/fight <编号> <展示值>  投票\n"
         "先 /rb bind"
     ),

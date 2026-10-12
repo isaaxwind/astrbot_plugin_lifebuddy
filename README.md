@@ -29,6 +29,7 @@ AstrBot 插件：生活好基友。给做谱群 / 玩家群用。
 | `/advice` | 审核列表（带编号；管理页 `advice_group_ids` 开群） |
 | `/advice <编号或SongID> [0\|1] [正文]` | 写评（1/ok 可空，默认 ok.；0/ng 必须写评） |
 | `/fight` | 打架谱面列表（按谱面编号，不是按歌） |
+| `/fight <编号>` | 按当前列表编号查询该谱面的实时均分、自己的票、可投范围和投票明细 |
 | `/fight <编号> <展示值>` | 投票 |
 
 QQ / 称呼 / 口香 / 绑号在 SQLite：`data/plugin_data/lifebuddy/lifebuddy.db`。大肥鱼每轮只看到当前发言者的 `QQ + 称呼`。

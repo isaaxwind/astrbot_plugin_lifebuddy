@@ -11,6 +11,7 @@ from .store import BuddyStore
 USAGE = (
     "用法：\n"
     "/fight  要打的谱面列表（按谱面编号，不是按歌）\n"
+    "/fight <编号>  当前谱面打架信息\n"
     "/fight <编号> <展示值>  投票"
 )
 
@@ -53,6 +54,14 @@ async def handle_fight(
 
     if args[0].lower() in ("help", "?"):
         yield event.plain_result(USAGE)
+        return
+
+    if len(args) == 1:
+        try:
+            text = await _render_details(rbdx, account, cache, gid, args[0])
+        except Exception as exc:
+            text = short_api_error(exc)
+        yield event.plain_result(text)
         return
 
     if len(args) < 2 or not args[1].lstrip("-").isdigit():
@@ -129,4 +138,55 @@ async def _render_list(rbdx: RbdxAPI, account: str, cache: NumberedCache, gid: s
         lines.append(
             f"{i}. {title}  {label}{level}  均分{avg}  {fighters}人打架  你:{mine_text}  可投{span}"
         )
+    return "\n".join(lines)
+
+
+async def _render_details(rbdx: RbdxAPI, account: str, cache: NumberedCache, gid: str, token: str) -> str:
+    if not token.isdigit() or int(token) < 1:
+        return "编号对不上，先 /fight 看列表"
+    cached = cache.get(gid)
+    fresh = None
+    if not cached:
+        fresh = await _load_list(rbdx, account, cache, gid)
+    target = cache.resolve_index(gid, token)
+    if target is None:
+        return "编号对不上，先 /fight 看列表"
+
+    # Keep the chart identity from the last displayed group list; refresh the votes
+    # for the current account without silently renumbering the user's selection.
+    if fresh is None:
+        fresh = await rbdx.list_subdiff(account)
+    key = (int(target["songId"]), int(target["difficulty"]))
+    chart = next((item for item in fresh if
+        (int(item["songId"]), int(item["difficulty"])) == key), None)
+    if chart is None:
+        return "这张谱面已不在打架列表，先 /fight 刷新列表"
+
+    label = DIFF_LABEL.get(key[1], "?")
+    title = chart.get("title") or key[0]
+    lines = [f"#{int(token)} {title}  {label}{chart.get('level')}", f"SongID {key[0]}"]
+    if chart.get("artist"):
+        lines.append(str(chart["artist"]))
+    author = chart.get("chartAuthor") or chart.get("chart_author")
+    if author:
+        lines.append(f"谱师 {author}")
+    mine = chart.get("myVote")
+    mine_text = str(mine) if mine is not None else "未投"
+    avg = chart.get("avgLevel")
+    lines.append(f"均分 {avg if avg is not None else '?'}  {_fight_count(chart)}人打架  你的票 {mine_text}")
+    vote_range = chart.get("voteRange") or []
+    span = f"0 或 {min(vote_range)}-{max(vote_range)}" if vote_range else "0"
+    lines.append(f"可投 {span}")
+    votes = [vote for vote in (chart.get("votes") or []) if isinstance(vote, dict)]
+    if votes:
+        lines.append("当前投票：")
+        for vote in votes:
+            name = vote.get("accountName") or vote.get("AccountName") or "?"
+            value = vote.get("subdiff")
+            if value is None:
+                value = vote.get("Subdiff", "?")
+            lines.append(f"- {name}: {value}")
+    else:
+        lines.append("还没人投票")
+    lines.append(f"投票：/fight {int(token)} <展示值>")
     return "\n".join(lines)

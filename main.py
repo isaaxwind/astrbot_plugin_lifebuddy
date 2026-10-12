@@ -34,7 +34,7 @@ from .lifebuddy.symmetry import handle_symmetry, ingest_event_image
 from .lifebuddy.weather import WeatherClient, handle_city, handle_weather
 
 
-@register("lifebuddy", "Isaax", "生活好基友", "1.2.0")
+@register("lifebuddy", "Isaax", "生活好基友", "1.2.1")
 class LifeBuddy(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -131,7 +131,7 @@ class LifeBuddy(Star):
 
     @filter.command("fight")
     async def fight(self, event: AstrMessageEvent):
-        """打架：/fight  /fight <编号> <展示值>"""
+        """打架：/fight  /fight <编号>  /fight <编号> <展示值>"""
         stop_event(event)
         if self._public_blocked(event):
             return
