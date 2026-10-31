@@ -12,9 +12,12 @@ from .store import BuddyStore
 USAGE = (
     "用法：\n"
     "/advice  审核列表\n"
+    "/advice 未评  只看自己还没评的（编号跟完整列表一样）\n"
     "/advice <编号或SongID>  看评语\n"
     "/advice <编号或SongID> <0|1> [正文]  写评（1/ok 可空评，默认 ok.；0/ng 必须写评）"
 )
+
+_PENDING = frozenset({"未评", "没评", "todo", "pending"})
 
 
 async def handle_advice(
@@ -48,6 +51,15 @@ async def handle_advice(
 
     if args[0].lower() in ("help", "?"):
         yield event.plain_result(USAGE)
+        return
+
+    if args[0].strip().lower() in _PENDING:
+        try:
+            text = await _render_pending(rbdx, account, cache, gid)
+        except Exception as exc:
+            yield event.plain_result(short_api_error(exc))
+            return
+        yield event.plain_result(text)
         return
 
     try:
@@ -102,21 +114,43 @@ async def _load_list(rbdx: RbdxAPI, account: str, cache: NumberedCache, gid: str
     return cache.put(gid, items)
 
 
+def _reviewed(item: dict) -> bool:
+    return bool(item.get("reviewedByMe"))
+
+
+def _advice_line(index: int, item: dict, *, mark: str = "") -> str:
+    title = item.get("title") or "?"
+    song_id = item.get("songId")
+    diff = DIFF_LABEL.get(int(item.get("difficulty") or 0), "?")
+    level = item.get("diff")
+    author = str(item.get("chartAuthor") or item.get("creator") or "").strip()
+    extra = f"  {author}" if author else ""
+    tail = f"  {mark}" if mark else ""
+    return f"{index}. {title}  {diff}{level}  {song_id}{extra}{tail}"
+
+
 async def _render_list(rbdx: RbdxAPI, account: str, cache: NumberedCache, gid: str) -> str:
     items = await _load_list(rbdx, account, cache, gid)
     if not items:
         return "审核队列是空的"
-    pending = sum(1 for item in items if not item.get("reviewedByMe"))
+    pending = sum(1 for item in items if not _reviewed(item))
     lines = [f"审核队列 {len(items)} 首（未评 {pending}）"]
     for i, item in enumerate(items, 1):
-        title = item.get("title") or "?"
-        song_id = item.get("songId")
-        diff = DIFF_LABEL.get(int(item.get("difficulty") or 0), "?")
-        level = item.get("diff")
-        mark = "已评" if item.get("reviewedByMe") else "未评"
-        author = str(item.get("chartAuthor") or item.get("creator") or "").strip()
-        extra = f"  {author}" if author else ""
-        lines.append(f"{i}. {title}  {diff}{level}  {song_id}{extra}  {mark}")
+        mark = "已评" if _reviewed(item) else "未评"
+        lines.append(_advice_line(i, item, mark=mark))
+    return "\n".join(lines)
+
+
+async def _render_pending(rbdx: RbdxAPI, account: str, cache: NumberedCache, gid: str) -> str:
+    items = await _load_list(rbdx, account, cache, gid)
+    if not items:
+        return "审核队列是空的"
+    pending = [(i, item) for i, item in enumerate(items, 1) if not _reviewed(item)]
+    if not pending:
+        return f"都评过了（{len(items)} 首）"
+    lines = [f"未评 {len(pending)} / {len(items)}"]
+    lines.extend(_advice_line(i, item) for i, item in pending)
+    lines.append("编号跟 /advice 一样，/advice <编号> 1 写评")
     return "\n".join(lines)
 
 

@@ -113,6 +113,7 @@ TOPICS: dict[str, str] = {
     ),
     "advice": (
         "/advice  审核列表\n"
+        "/advice 未评  只看自己还没评的（编号跟完整列表一样）\n"
         "/advice <编号或SongID>  看评\n"
         "/advice <编号或SongID> <0|1> [正文]  写评\n"
         "1/ok 可空评；0/ng 必须写评\n"
