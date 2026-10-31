@@ -120,7 +120,7 @@ class LifeBuddy(Star):
 
     @filter.command("advice")
     async def advice(self, event: AstrMessageEvent):
-        """审核：/advice  /advice <编号> 1 正文"""
+        """审核：/advice  /advice 未评  /advice <编号> 1 正文"""
         stop_event(event)
         if self._public_blocked(event):
             return
