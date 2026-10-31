@@ -13,7 +13,7 @@ from .symmetry import process_image, _write_temp
 PLUGIN_DIR = Path(__file__).resolve().parent.parent
 MEME_DIR = PLUGIN_DIR / "data" / "memes"
 ADVICE_MEME = MEME_DIR / "advice_self.jpg"
-FIGHT_MEME = MEME_DIR / "fight_self.jpg"
+FIGHT_MEME = MEME_DIR / "fight_self.gif"
 
 
 def _norm(value: str) -> str:
