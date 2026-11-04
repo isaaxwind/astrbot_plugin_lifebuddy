@@ -9,15 +9,15 @@ from pathlib import Path
 
 
 def jiju_collapsed(text: str) -> str:
-    """整句由同一小段反复拼成时，只留一段。123123123 → 123。"""
-    raw = text or ""
-    n = len(raw)
-    if n < 2:
-        return raw
-    for size in range(1, n // 2 + 1):
-        if n % size == 0 and raw == raw[:size] * (n // size):
-            return raw[:size]
-    return raw
+    """重复过的字只留第一次出现的，不看是否挨在一起。我知道我爱你 → 我知道爱你。"""
+    seen: set[str] = set()
+    out: list[str] = []
+    for ch in text or "":
+        if ch in seen:
+            continue
+        seen.add(ch)
+        out.append(ch)
+    return "".join(out)
 
 
 def jiju_score(text: str) -> int:
@@ -41,6 +41,24 @@ def data_dir() -> Path:
     fallback = Path("data/plugin_data/lifebuddy")
     fallback.mkdir(parents=True, exist_ok=True)
     return fallback
+
+
+@dataclass(frozen=True)
+class JijuQuote:
+    text: str
+    day: str
+    qq: str = ""
+
+
+def _sort_jiju(quotes: list[JijuQuote]) -> list[JijuQuote]:
+    return sorted(quotes, key=lambda quote: (-jiju_score(quote.text), quote.text, quote.day))
+
+
+def _jiju_keep(newer: JijuQuote, prev: JijuQuote) -> bool:
+    """同一句留有作者的；都有或都没有时留更早的那天。"""
+    if bool(newer.qq) != bool(prev.qq):
+        return bool(newer.qq)
+    return newer.day < prev.day
 
 
 @dataclass(frozen=True)
@@ -133,6 +151,7 @@ class BuddyStore:
                 day TEXT NOT NULL,
                 text TEXT NOT NULL,
                 length INTEGER NOT NULL,
+                qq TEXT NOT NULL DEFAULT '',
                 PRIMARY KEY (group_id, day, text)
             );
             CREATE TABLE IF NOT EXISTS jiju_blocked (
@@ -146,6 +165,7 @@ class BuddyStore:
                 day TEXT NOT NULL,
                 rank INTEGER NOT NULL,
                 text TEXT NOT NULL,
+                qq TEXT NOT NULL DEFAULT '',
                 PRIMARY KEY (group_id, day, rank)
             );
             CREATE TABLE IF NOT EXISTS jiju_announce (
@@ -181,6 +201,9 @@ class BuddyStore:
             str(r[1])
             for r in self._conn.execute("PRAGMA table_info(sleeps)").fetchall()
         }
+        self._ensure_column("jiju_candidates", "qq", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("jiju_daily", "qq", "TEXT NOT NULL DEFAULT ''")
+        self._rescore_jiju_daily()
         if sleep_cols and "group_id" not in sleep_cols:
             self._conn.execute("DROP TABLE sleeps")
             self._conn.execute(
@@ -197,6 +220,61 @@ class BuddyStore:
 
     def close(self) -> None:
         self._conn.close()
+
+    def _ensure_column(self, table: str, column: str, decl: str) -> None:
+        cols = {
+            str(row[1])
+            for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column not in cols:
+            self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
+    def _rescore_jiju_daily(self) -> None:
+        """已保存的金句按不重复字符长度重排。"""
+        rows = self._conn.execute(
+            """
+            SELECT group_id, day, rank, text, qq FROM jiju_daily
+            ORDER BY group_id, day, rank
+            """
+        ).fetchall()
+        grouped: dict[tuple[str, str], list] = {}
+        for row in rows:
+            grouped.setdefault((str(row["group_id"]), str(row["day"])), []).append(row)
+        for (gid, day), items in grouped.items():
+            ordered = sorted(
+                items,
+                key=lambda row: (-jiju_score(str(row["text"] or "")), str(row["text"] or "")),
+            )
+            current = [(str(row["text"] or ""), str(row["qq"] or "")) for row in items]
+            desired: list[tuple[str, str]] = []
+            for row in ordered:
+                text = str(row["text"] or "")
+                qq = str(row["qq"] or "")
+                if not qq:
+                    found = self._conn.execute(
+                        """
+                        SELECT qq FROM jiju_candidates
+                        WHERE group_id = ? AND day = ? AND text = ? AND qq != ''
+                        """,
+                        (gid, day, text),
+                    ).fetchone()
+                    if found:
+                        qq = str(found["qq"] or "")
+                desired.append((text, qq))
+            if current == desired:
+                continue
+            self._conn.execute(
+                "DELETE FROM jiju_daily WHERE group_id = ? AND day = ?",
+                (gid, day),
+            )
+            for rank, (text, qq) in enumerate(desired, 1):
+                self._conn.execute(
+                    """
+                    INSERT INTO jiju_daily(group_id, day, rank, text, qq)
+                    VALUES (?,?,?,?,?)
+                    """,
+                    (gid, day, rank, text, qq),
+                )
 
     def observe_speaker(self, qq: str, seen_name: str) -> NickRow | None:
         qq = str(qq or "").strip()
@@ -643,17 +721,24 @@ class BuddyStore:
             "people": [str(r["qq"]) for r in people],
         }
 
-    def add_jiju_candidate(self, group_id: str, day: str, text: str) -> None:
+    def add_jiju_candidate(self, group_id: str, day: str, text: str, qq: str = "") -> None:
         if self.is_jiju_blocked(group_id, day, text):
             return
         if self.is_yesterday_jiju(group_id, day, text):
             return
+        qq = str(qq or "").strip()
         self._conn.execute(
             """
-            INSERT OR IGNORE INTO jiju_candidates(group_id, day, text, length)
-            VALUES (?,?,?,?)
+            INSERT INTO jiju_candidates(group_id, day, text, length, qq)
+            VALUES (?,?,?,?,?)
+            ON CONFLICT(group_id, day, text) DO UPDATE SET
+                length = excluded.length,
+                qq = CASE
+                    WHEN jiju_candidates.qq = '' THEN excluded.qq
+                    ELSE jiju_candidates.qq
+                END
             """,
-            (group_id, day, text, jiju_score(text)),
+            (group_id, day, text, jiju_score(text), qq),
         )
         self._conn.commit()
 
@@ -702,13 +787,13 @@ class BuddyStore:
         )
         self._conn.commit()
 
-    def finalize_jiju(self, group_id: str, day: str) -> list[str]:
+    def finalize_jiju(self, group_id: str, day: str) -> list[JijuQuote]:
         existing = self.list_jiju(group_id, day)
         if existing:
             return existing
         rows = self._conn.execute(
             """
-            SELECT c.text AS text
+            SELECT c.text AS text, c.qq AS qq
             FROM jiju_candidates c
             WHERE c.group_id = ? AND c.day = ?
               AND NOT EXISTS (
@@ -718,54 +803,67 @@ class BuddyStore:
             """,
             (group_id, day),
         ).fetchall()
-        texts = [str(r["text"]) for r in rows]
-        texts.sort(key=lambda text: (-jiju_score(text), text))
-        texts = texts[:5]
-        for i, text in enumerate(texts, 1):
+        quotes = [
+            JijuQuote(str(row["text"] or ""), day, str(row["qq"] or ""))
+            for row in rows
+        ]
+        quotes = _sort_jiju(quotes)[:5]
+        for rank, quote in enumerate(quotes, 1):
             self._conn.execute(
-                "INSERT OR IGNORE INTO jiju_daily(group_id, day, rank, text) VALUES (?,?,?,?)",
-                (group_id, day, i, text),
+                """
+                INSERT OR IGNORE INTO jiju_daily(group_id, day, rank, text, qq)
+                VALUES (?,?,?,?,?)
+                """,
+                (group_id, day, rank, quote.text, quote.qq),
             )
         self._conn.commit()
-        return texts
+        return quotes
 
-    def list_jiju(self, group_id: str, day: str) -> list[str]:
+    def list_jiju(self, group_id: str, day: str) -> list[JijuQuote]:
         rows = self._conn.execute(
             """
-            SELECT text FROM jiju_daily
+            SELECT text, qq FROM jiju_daily
             WHERE group_id = ? AND day = ?
-            ORDER BY rank
             """,
             (group_id, day),
         ).fetchall()
-        return [str(r["text"]) for r in rows]
+        quotes = [
+            JijuQuote(str(row["text"] or ""), day, str(row["qq"] or ""))
+            for row in rows
+            if str(row["text"] or "")
+        ]
+        return _sort_jiju(quotes)
 
-    def recent_jiju(self, group_id: str, since_day: str, until_day: str) -> list[str]:
+    def recent_jiju(self, group_id: str, since_day: str, until_day: str) -> list[JijuQuote]:
         rows = self._conn.execute(
             """
-            SELECT DISTINCT text FROM jiju_daily
+            SELECT day, text, qq FROM jiju_daily
             WHERE group_id = ? AND day >= ? AND day <= ?
-            ORDER BY day DESC, rank
             """,
             (group_id, since_day, until_day),
         ).fetchall()
-        return [str(r["text"]) for r in rows]
+        quotes = [
+            JijuQuote(str(row["text"] or ""), str(row["day"] or ""), str(row["qq"] or ""))
+            for row in rows
+            if str(row["text"] or "")
+        ]
+        return _sort_jiju(quotes)
 
-    def longest_jiju(self, group_id: str, limit: int = 5) -> list[str]:
+    def longest_jiju(self, group_id: str, limit: int = 5) -> list[JijuQuote]:
         rows = self._conn.execute(
-            "SELECT text FROM jiju_daily WHERE group_id = ?",
+            "SELECT day, text, qq FROM jiju_daily WHERE group_id = ?",
             (group_id,),
         ).fetchall()
-        ranked: list[tuple[int, str]] = []
-        seen: set[str] = set()
+        best: dict[str, JijuQuote] = {}
         for row in rows:
             text = str(row["text"] or "")
-            if not text or text in seen:
+            if not text:
                 continue
-            seen.add(text)
-            ranked.append((jiju_score(text), text))
-        ranked.sort(key=lambda item: (-item[0], item[1]))
-        return [text for _, text in ranked[:limit]]
+            quote = JijuQuote(text, str(row["day"] or ""), str(row["qq"] or ""))
+            prev = best.get(text)
+            if prev is None or _jiju_keep(quote, prev):
+                best[text] = quote
+        return _sort_jiju(list(best.values()))[:limit]
 
     def get_city(self, qq: str) -> str:
         row = self._conn.execute(

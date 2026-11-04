@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from astrbot.api.event import AstrMessageEvent
 
 from .identity import group_key, is_directed_at_bot, is_private_chat, is_self_message, self_id, sender_qq, stop_event
-from .store import BuddyStore
+from .store import BuddyStore, JijuQuote
 
 TZ = ZoneInfo("Asia/Shanghai")
 FUDU_ECHO_MIN = 4
@@ -177,45 +177,46 @@ async def handle_jiju(event: AstrMessageEvent, store: BuddyStore):
         yield event.plain_result(USAGE_JIJU)
         return
     if token in ("总", "历史", "all", "最长"):
-        texts = store.longest_jiju(gid)
-        if not texts:
+        quotes = store.longest_jiju(gid)
+        if not quotes:
             yield event.plain_result("还没有金句")
             return
-        lines = ["历史最长金句"]
-        for i, text in enumerate(texts, 1):
-            lines.append(f"{i}. {text}")
-        yield event.plain_result("\n".join(lines))
+        yield event.plain_result(_jiju_list_text(store, "历史最长金句", quotes))
         return
     if token in ("7", "周"):
         until = today_str()
         since = (now_dt().date() - timedelta(days=6)).isoformat()
-        texts = store.recent_jiju(gid, since, until)
-        if not texts:
+        quotes = store.recent_jiju(gid, since, until)
+        if not quotes:
             yield event.plain_result("近7天还没有金句")
             return
-        lines = ["近7天金句"]
-        for i, text in enumerate(texts, 1):
-            lines.append(f"{i}. {text}")
-        yield event.plain_result("\n".join(lines))
+        yield event.plain_result(_jiju_list_text(store, "近7天金句", quotes))
         return
     yesterday = (now_dt().date() - timedelta(days=1)).isoformat()
     store.finalize_jiju(gid, yesterday)
-    texts = store.list_jiju(gid, yesterday)
-    if not texts:
+    quotes = store.list_jiju(gid, yesterday)
+    if not quotes:
         yield event.plain_result("昨日没有金句")
         return
-    yield event.plain_result(_jiju_announce_text(yesterday, texts))
+    yield event.plain_result(_jiju_announce_text(store, yesterday, quotes))
 
 
-def _jiju_announce_text(day: str, texts: list[str]) -> str:
-    if not texts:
-        return f"{day} 没有金句"
-    if len(texts) == 1:
-        return f"{day} 金句\n{texts[0]}"
-    lines = [f"{day} 金句"]
-    for i, text in enumerate(texts, 1):
-        lines.append(f"{i}. {text}")
+def _jiju_line(store: BuddyStore, index: int, quote: JijuQuote) -> str:
+    author = f" by @{store.display_name(quote.qq)}" if quote.qq else ""
+    return f"{index}、{quote.text} （{quote.day}{author}）"
+
+
+def _jiju_list_text(store: BuddyStore, title: str, quotes: list[JijuQuote]) -> str:
+    lines = [title]
+    for i, quote in enumerate(quotes, 1):
+        lines.append(_jiju_line(store, i, quote))
     return "\n".join(lines)
+
+
+def _jiju_announce_text(store: BuddyStore, day: str, quotes: list[JijuQuote]) -> str:
+    if not quotes:
+        return f"{day} 没有金句"
+    return _jiju_list_text(store, f"{day} 金句", quotes)
 
 
 def _chain_text(store: BuddyStore, chain: dict, title: str) -> str:
@@ -231,10 +232,10 @@ def _chain_text(store: BuddyStore, chain: dict, title: str) -> str:
 def _pick_recent_jiju(store: BuddyStore, gid: str) -> str:
     until = today_str()
     since = (now_dt().date() - timedelta(days=6)).isoformat()
-    texts = store.recent_jiju(gid, since, until)
-    if not texts:
+    quotes = store.recent_jiju(gid, since, until)
+    if not quotes:
         return ""
-    return random.choice(texts)
+    return random.choice(quotes).text
 
 
 async def process_group_chat(event: AstrMessageEvent, store: BuddyStore, context=None):
@@ -269,7 +270,7 @@ async def process_group_chat(event: AstrMessageEvent, store: BuddyStore, context
     )
     talking_to_bot = is_directed_at_bot(event, context)
     if is_jiju_text(text) and not repeating and not talking_to_bot:
-        store.add_jiju_candidate(gid, today_str(), text)
+        store.add_jiju_candidate(gid, today_str(), text, qq)
 
     if state and len(state.get("people") or []) > 1:
         return
@@ -286,10 +287,10 @@ async def _maybe_announce_jiju(event: AstrMessageEvent, store: BuddyStore, gid: 
     last = store.jiju_announced_day(gid)
     if last == today:
         return
-    texts = store.finalize_jiju(gid, yesterday)
+    quotes = store.finalize_jiju(gid, yesterday)
     store.mark_jiju_announced(gid, today)
-    if texts:
-        yield event.plain_result(_jiju_announce_text(yesterday, texts))
+    if quotes:
+        yield event.plain_result(_jiju_announce_text(store, yesterday, quotes))
 
 
 async def _handle_fudu_message(
