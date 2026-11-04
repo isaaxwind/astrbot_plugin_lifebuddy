@@ -8,6 +8,22 @@ from datetime import date, timedelta
 from pathlib import Path
 
 
+def jiju_collapsed(text: str) -> str:
+    """整句由同一小段反复拼成时，只留一段。123123123 → 123。"""
+    raw = text or ""
+    n = len(raw)
+    if n < 2:
+        return raw
+    for size in range(1, n // 2 + 1):
+        if n % size == 0 and raw == raw[:size] * (n // size):
+            return raw[:size]
+    return raw
+
+
+def jiju_score(text: str) -> int:
+    return len(jiju_collapsed(text))
+
+
 def data_dir() -> Path:
     try:
         from astrbot.api.star import StarTools
@@ -637,7 +653,7 @@ class BuddyStore:
             INSERT OR IGNORE INTO jiju_candidates(group_id, day, text, length)
             VALUES (?,?,?,?)
             """,
-            (group_id, day, text, len(text)),
+            (group_id, day, text, jiju_score(text)),
         )
         self._conn.commit()
 
@@ -699,12 +715,12 @@ class BuddyStore:
                   SELECT 1 FROM jiju_blocked b
                   WHERE b.group_id = c.group_id AND b.day = c.day AND b.text = c.text
               )
-            ORDER BY c.length DESC, c.text
-            LIMIT 5
             """,
             (group_id, day),
         ).fetchall()
         texts = [str(r["text"]) for r in rows]
+        texts.sort(key=lambda text: (-jiju_score(text), text))
+        texts = texts[:5]
         for i, text in enumerate(texts, 1):
             self._conn.execute(
                 "INSERT OR IGNORE INTO jiju_daily(group_id, day, rank, text) VALUES (?,?,?,?)",
@@ -734,6 +750,22 @@ class BuddyStore:
             (group_id, since_day, until_day),
         ).fetchall()
         return [str(r["text"]) for r in rows]
+
+    def longest_jiju(self, group_id: str, limit: int = 5) -> list[str]:
+        rows = self._conn.execute(
+            "SELECT text FROM jiju_daily WHERE group_id = ?",
+            (group_id,),
+        ).fetchall()
+        ranked: list[tuple[int, str]] = []
+        seen: set[str] = set()
+        for row in rows:
+            text = str(row["text"] or "")
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            ranked.append((jiju_score(text), text))
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        return [text for _, text in ranked[:limit]]
 
     def get_city(self, qq: str) -> str:
         row = self._conn.execute(
