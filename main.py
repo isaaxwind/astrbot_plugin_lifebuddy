@@ -149,7 +149,7 @@ class LifeBuddy(Star):
 
     @filter.command("金句", alias={"jiju"})
     async def jiju_cmd(self, event: AstrMessageEvent):
-        """昨日金句 / 近7天"""
+        """昨日金句 / 近7天 / 历史最长"""
         stop_event(event)
         if self._public_blocked(event):
             return

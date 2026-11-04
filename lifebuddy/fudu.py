@@ -37,7 +37,8 @@ USAGE_FUDU = (
 )
 USAGE_JIJU = (
     "/金句  昨日金句\n"
-    "/金句 7  近7天"
+    "/金句 7  近7天\n"
+    "/金句 总  历史最长的5句"
 )
 
 _listed_chains: dict[str, list[int]] = {}
@@ -171,9 +172,19 @@ async def handle_jiju(event: AstrMessageEvent, store: BuddyStore):
     gid = group_key(event)
     parts = event.message_str.split()
     args = parts[1:] if parts else []
-    token = args[0] if args else ""
+    token = args[0].lower() if args else ""
     if token in ("help", "?", "帮助"):
         yield event.plain_result(USAGE_JIJU)
+        return
+    if token in ("总", "历史", "all", "最长"):
+        texts = store.longest_jiju(gid)
+        if not texts:
+            yield event.plain_result("还没有金句")
+            return
+        lines = ["历史最长金句"]
+        for i, text in enumerate(texts, 1):
+            lines.append(f"{i}. {text}")
+        yield event.plain_result("\n".join(lines))
         return
     if token in ("7", "周"):
         until = today_str()
