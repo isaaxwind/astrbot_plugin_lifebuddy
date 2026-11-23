@@ -54,7 +54,7 @@ async def handle_ask(event: AstrMessageEvent, store: BuddyStore | None = None):
         return
 
     question = args[1]
-    choices = args[2:]
+    choices = list(dict.fromkeys(args[2:]))
     if len(choices) < 2:
         yield event.plain_result("选项太少！")
         return
